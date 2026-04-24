@@ -1,0 +1,9 @@
+.aio
+.env
+node_modules/
+dist/
+.cache/
+.parcel-cache/
+.DS_Store
+coverage/
+*.log

@@ -1,0 +1,72 @@
+application:
+  actions: actions
+  web: web-src
+  runtimeManifest:
+    packages:
+      llm-website-app:
+        license: Apache-2.0
+        inputs:
+          SITE_INDEX_URL: $SITE_INDEX_URL
+          SITE_BASE_URL: $SITE_BASE_URL
+          HOMEPAGE_PATH: $HOMEPAGE_PATH
+          INDEX_CACHE_TTL_SECONDS: $INDEX_CACHE_TTL_SECONDS
+          CONVERSATION_URL_TEMPLATE: $CONVERSATION_URL_TEMPLATE
+        actions:
+          mcp:
+            function: actions/mcp/index.ts
+            web: 'yes'
+            runtime: nodejs:22
+            annotations:
+              require-adobe-auth: false
+              final: true
+          api-products:
+            function: actions/api-products/index.ts
+            web: 'yes'
+            runtime: nodejs:22
+            annotations:
+              require-adobe-auth: false
+              final: true
+          api-product-detail:
+            function: actions/api-product-detail/index.ts
+            web: 'yes'
+            runtime: nodejs:22
+            annotations:
+              require-adobe-auth: false
+              final: true
+          api-whats-new:
+            function: actions/api-whats-new/index.ts
+            web: 'yes'
+            runtime: nodejs:22
+            annotations:
+              require-adobe-auth: false
+              final: true
+          openapi:
+            function: actions/openapi/index.ts
+            web: 'yes'
+            runtime: nodejs:22
+            annotations:
+              require-adobe-auth: false
+              final: true
+        apis:
+          llm-website-api:
+            v1:
+              mcp:
+                mcp:
+                  method: post
+                  response: http
+              products:
+                api-products:
+                  method: get
+                  response: http
+              products/{id}:
+                api-product-detail:
+                  method: get
+                  response: http
+              whats-new:
+                api-whats-new:
+                  method: get
+                  response: http
+              openapi.json:
+                openapi:
+                  method: get
+                  response: http

@@ -1,0 +1,23 @@
+{
+  "name": "adobe-app-builder-llm-app-boilerplate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adobe App Builder boilerplate for exposing Edge Delivery Services website products to LLM apps over MCP Apps and REST.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js",
+    "app:dev": "aio app dev",
+    "app:build": "aio app build",
+    "app:deploy": "aio app deploy"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.98.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

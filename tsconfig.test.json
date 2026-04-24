@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".cache/test",
+    "rootDir": ".",
+    "sourceMap": true
+  },
+  "include": ["actions/**/*.ts", "test/**/*.ts"]
+}
