@@ -1,17 +1,60 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { Buffer } from "node:buffer";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { corsHeaders, getMethod, parseJsonBody } from "../shared/http";
-import { RuntimeParams, RuntimeResponse } from "../shared/types";
-import { createWebsiteMcpServer } from "./website-mcp-server";
+/*
+ * Streamable HTTP + req/res shim for @modelcontextprotocol/sdk on Adobe I/O Runtime.
+ * Based on adobe/generator-app-remote-mcp-server-generic and OpenWhisk/Hono compatibility fixes.
+ */
+
+const { Buffer } = require("node:buffer");
+const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 
 const STREAMABLE_ACCEPT = "application/json, text/event-stream";
 
-/**
- * Lowercase keys for consistent lookup (same idea as Adobe remote MCP template).
- */
-function normalizeIncomingHeaders(params: RuntimeParams): Record<string, string> {
-  const out: Record<string, string> = {};
+const corsHeaders = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+  "access-control-allow-headers": "content-type,authorization,mcp-session-id,mcp-protocol-version,accept",
+  "access-control-expose-headers": "mcp-session-id"
+};
+
+function getMethod(params) {
+  return String(params.__ow_method || params.method || "GET").toUpperCase();
+}
+
+function decodeBase64(value) {
+  if (!/^[A-Za-z0-9+/]+=*$/.test(value) || value.length % 4 !== 0) {
+    return undefined;
+  }
+  try {
+    return Buffer.from(value, "base64").toString("utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function parseJsonBody(params) {
+  const body = params.__ow_body ?? params.body;
+  if (body == null || body === "") {
+    return {};
+  }
+  if (typeof body === "object") {
+    return body;
+  }
+  const raw = String(body);
+  const candidates = [raw, decodeBase64(raw)];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // continue
+    }
+  }
+  throw new Error("Request body must be valid JSON.");
+}
+
+function normalizeIncomingHeaders(params) {
+  const out = {};
   const src = params.__ow_headers || {};
   for (const key in src) {
     if (Object.prototype.hasOwnProperty.call(src, key)) {
@@ -24,25 +67,17 @@ function normalizeIncomingHeaders(params: RuntimeParams): Record<string, string>
   return out;
 }
 
-/** Node-style flat header list required by @hono/node-server `newHeadersFromIncoming`. */
-function buildRawHeaders(headers: Record<string, string>): string[] {
-  const raw: string[] = [];
+function buildRawHeaders(headers) {
+  const raw = [];
   for (const [k, v] of Object.entries(headers)) {
     raw.push(k, v);
   }
   return raw;
 }
 
-/**
- * Build a minimal IncomingMessage-shaped object for @hono/node-server / MCP transport.
- * Mirrors adobe/generator-app-remote-mcp-server-generic mcp-server/index.js.
- */
-function createCompatibleRequest(
-  params: RuntimeParams,
-  parsedBody: unknown
-): IncomingMessage {
+function createCompatibleRequest(params, parsedBody) {
   const incomingHeaders = normalizeIncomingHeaders(params);
-  const headers: Record<string, string> = {
+  const headers = {
     "content-type": "application/json",
     "mcp-session-id": String(params["mcp-session-id"] || incomingHeaders["mcp-session-id"] || ""),
     ...incomingHeaders,
@@ -54,9 +89,8 @@ function createCompatibleRequest(
   if (!headers.host) {
     headers.host = "localhost";
   }
-
   const method = (params.__ow_method || "GET").toUpperCase();
-  const path = typeof params.__ow_path === "string" ? params.__ow_path : "/mcp";
+  const path = typeof params.__ow_path === "string" ? params.__ow_path : "/mcp-server";
   const rawHeaders = buildRawHeaders(headers);
 
   const req = {
@@ -70,18 +104,17 @@ function createCompatibleRequest(
       remoteAddress: "127.0.0.1",
       encrypted: true
     },
-    /** Hono POST path registers `incoming.on("end", …)`; emit end asynchronously like a drained body. */
-    on(this: unknown, event: string, listener: (...args: unknown[]) => void) {
-      if (event === "end") {
+    on(_event, listener) {
+      if (_event === "end") {
         queueMicrotask(() => listener());
       }
-      return this;
+      return req;
     },
-    once(this: unknown, event: string, listener: (...args: unknown[]) => void) {
-      if (event === "end") {
+    once(_event, listener) {
+      if (_event === "end") {
         queueMicrotask(() => listener());
       }
-      return this;
+      return req;
     },
     off() {
       return req;
@@ -89,19 +122,14 @@ function createCompatibleRequest(
     removeListener() {
       return req;
     },
-    get(name: string) {
+    get(name) {
       return headers[name.toLowerCase()];
     }
   };
-
-  return req as unknown as IncomingMessage;
+  return req;
 }
 
-/**
- * Collect Node ServerResponse writes into OpenWhisk { statusCode, headers, body }.
- * Header keys use Title-Case like the Adobe template (Pekko / gateway compatibility).
- */
-function canonicalHeaderName(key: string): string {
+function canonicalHeaderName(key) {
   return key
     .split("-")
     .filter(Boolean)
@@ -109,9 +137,9 @@ function canonicalHeaderName(key: string): string {
     .join("-");
 }
 
-function createCompatibleResponse(): ServerResponse & { getResult: () => RuntimeResponse } {
+function createCompatibleResponse() {
   let statusCode = 200;
-  let headers: Record<string, string> = {
+  let headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
     "Access-Control-Allow-Headers":
@@ -122,7 +150,7 @@ function createCompatibleResponse(): ServerResponse & { getResult: () => Runtime
   let body = "";
   let headersSent = false;
 
-  const appendChunk = (chunk: unknown) => {
+  const appendChunk = (chunk) => {
     if (chunk === undefined || chunk === null) {
       return;
     }
@@ -137,7 +165,7 @@ function createCompatibleResponse(): ServerResponse & { getResult: () => Runtime
     body += JSON.stringify(chunk);
   };
 
-  const setMergedHeader = (name: string, value: string | number | undefined) => {
+  const setMergedHeader = (name, value) => {
     if (value === undefined || value === null) {
       return;
     }
@@ -149,12 +177,12 @@ function createCompatibleResponse(): ServerResponse & { getResult: () => Runtime
   };
 
   const res = {
-    status(code: number) {
+    status(code) {
       statusCode = code;
-      (res as { statusCode: number }).statusCode = code;
+      res.statusCode = code;
       return res;
     },
-    setHeader(name: string, value: string | number | string[]) {
+    setHeader(name, value) {
       if (Array.isArray(value)) {
         setMergedHeader(name, value.join(", "));
       } else {
@@ -162,40 +190,42 @@ function createCompatibleResponse(): ServerResponse & { getResult: () => Runtime
       }
       return res;
     },
-    getHeader(name: string) {
+    getHeader(name) {
       return headers[canonicalHeaderName(name)] ?? headers[name];
     },
-    writeHead(code: number, reasonOrHeaders?: unknown, headerObj?: Record<string, string>) {
+    writeHead(code, reasonOrHeaders, headerObj) {
       statusCode = code;
-      (res as { statusCode: number }).statusCode = code;
+      res.statusCode = code;
       const hdrs =
         typeof reasonOrHeaders === "object" && reasonOrHeaders !== null
-          ? (reasonOrHeaders as Record<string, string>)
+          ? reasonOrHeaders
           : headerObj || {};
       for (const [k, v] of Object.entries(hdrs)) {
         if (typeof v === "string") {
           setMergedHeader(k, v);
+        } else if (typeof v === "number" || typeof v === "boolean") {
+          setMergedHeader(k, String(v));
         }
       }
       headersSent = true;
       return res;
     },
-    write(chunk: unknown) {
+    write(chunk) {
       appendChunk(chunk);
       return true;
     },
-    end(chunk?: unknown) {
+    end(chunk) {
       appendChunk(chunk);
       headersSent = true;
       return res;
     },
-    json(obj: unknown) {
+    json(obj) {
       setMergedHeader("Content-Type", "application/json");
       body = JSON.stringify(obj);
       headersSent = true;
       return res;
     },
-    send(data?: unknown) {
+    send(data) {
       if (data !== undefined && data !== null) {
         body = typeof data === "string" ? data : JSON.stringify(data);
       }
@@ -238,11 +268,12 @@ function createCompatibleResponse(): ServerResponse & { getResult: () => Runtime
     addListener: () => res,
     off: () => res,
 
-    getResult(): RuntimeResponse {
-      const outHeaders: Record<string, string> = { ...headers };
+    getResult() {
+      const outHeaders = { ...headers };
       for (const [k, v] of Object.entries(corsHeaders)) {
-        if (!outHeaders[canonicalHeaderName(k)]) {
-          outHeaders[canonicalHeaderName(k)] = v;
+        const ck = canonicalHeaderName(k);
+        if (outHeaders[ck] === undefined) {
+          outHeaders[ck] = v;
         }
       }
       return {
@@ -252,16 +283,15 @@ function createCompatibleResponse(): ServerResponse & { getResult: () => Runtime
       };
     }
   };
-
-  return res as unknown as ServerResponse & { getResult: () => RuntimeResponse };
+  return res;
 }
 
 /**
- * Stateless Streamable HTTP (JSON response mode) for one Adobe I/O Runtime web activation.
- * Uses the same Node transport + req/res shim as Adobe's generator-app-remote-mcp-server-generic.
+ * @param {Record<string, unknown>} params
+ * @param {() => import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} createMcpServer
  */
-export async function handleStreamableMcpInvocation(params: RuntimeParams): Promise<RuntimeResponse> {
-  const server = createWebsiteMcpServer(params);
+async function handleStreamableMcpInvocation(params, createMcpServer) {
+  const server = createMcpServer();
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true
@@ -273,9 +303,9 @@ export async function handleStreamableMcpInvocation(params: RuntimeParams): Prom
   const req = createCompatibleRequest(params, parsedBody);
   const res = createCompatibleResponse();
 
-  const responseComplete = new Promise<void>((resolve) => {
+  const responseComplete = new Promise((resolve) => {
     const originalEnd = res.end.bind(res);
-    (res as { end: (chunk?: unknown) => unknown }).end = function endPatched(chunk?: unknown) {
+    res.end = function endPatched(chunk) {
       const r = originalEnd(chunk);
       setTimeout(() => resolve(), 10);
       return r;
@@ -285,9 +315,15 @@ export async function handleStreamableMcpInvocation(params: RuntimeParams): Prom
   try {
     await transport.handleRequest(req, res, parsedBody);
     await responseComplete;
-    return (res as ServerResponse & { getResult: () => RuntimeResponse }).getResult();
+    return res.getResult();
   } finally {
     await transport.close();
     await server.close();
   }
 }
+
+module.exports = {
+  getMethod,
+  parseJsonBody,
+  handleStreamableMcpInvocation
+};

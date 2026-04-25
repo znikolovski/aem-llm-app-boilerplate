@@ -1,27 +1,26 @@
 {
-  "name": "adobe-app-builder-llm-app-boilerplate",
-  "version": "0.1.0",
+  "name": "adobe-app-builder-mcp-mvp",
+  "version": "1.0.0",
   "private": true,
-  "description": "Adobe App Builder boilerplate for exposing Edge Delivery Services website products to LLM apps over MCP Apps and REST.",
-  "license": "Apache-2.0",
+  "description": "MVP MCP server on Adobe I/O Runtime with Streamable HTTP and OpenAI Apps-style rich UI (from adobe/generator-app-remote-mcp-server-generic).",
+  "main": "actions/mcp-server/index.js",
   "scripts": {
-    "build": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "app:dev": "aio app dev",
     "app:build": "aio app build",
     "app:deploy": "aio app deploy"
   },
+  "dependencies": {
+    "@adobe/aio-sdk": "^5.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0"
+  },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "ts-loader": "^9.5.2",
-    "typescript": "^5.8.3",
-    "webpack": "^5.98.0"
+    "jest": "^29.7.0"
   },
   "engines": {
     "node": ">=22"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^3.25.76"
-  }
+  "license": "Apache-2.0"
 }
