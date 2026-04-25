@@ -10,9 +10,21 @@ const indexPayload = readFileSync(join(fixtures, "index.json"), "utf8");
 const productHtml = readFileSync(join(fixtures, "product.html"), "utf8");
 const homeHtml = readFileSync(join(fixtures, "home.html"), "utf8");
 
+const mcpInitializeParams = {
+  protocolVersion: "2025-03-26",
+  capabilities: {},
+  clientInfo: { name: "unit-test", version: "0.0.0" }
+};
+
 function baseParams(body: unknown): RuntimeParams {
   return {
     __ow_method: "POST",
+    __ow_path: "/api/v1/web/llm-website-app/mcp",
+    __ow_headers: {
+      accept: "application/json, text/event-stream",
+      host: "www.example.com",
+      "content-type": "application/json"
+    },
     __ow_body: JSON.stringify(body),
     SITE_INDEX_URL: "https://www.example.com/query-index.json",
     SITE_BASE_URL: "https://www.example.com",
@@ -22,7 +34,9 @@ function baseParams(body: unknown): RuntimeParams {
 }
 
 test("handles MCP initialize and tools list", async () => {
-  const initialize = await mcpMain(baseParams({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }));
+  const initialize = await mcpMain(
+    baseParams({ jsonrpc: "2.0", id: 1, method: "initialize", params: mcpInitializeParams })
+  );
   const initBody = JSON.parse(initialize.body || "{}");
   assert.equal(initBody.result.serverInfo.name, "adobe-app-builder-website-llm-app");
 
