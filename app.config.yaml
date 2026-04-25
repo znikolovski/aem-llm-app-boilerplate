@@ -12,6 +12,8 @@ application:
           INDEX_CACHE_TTL_SECONDS: $INDEX_CACHE_TTL_SECONDS
           CONVERSATION_URL_TEMPLATE: $CONVERSATION_URL_TEMPLATE
         actions:
+          # Match Adobe remote MCP template: raw-http keeps JSON-RPC in __ow_body;
+          # web-export marks a public web action. See generator-app-remote-mcp-server-generic.
           mcp:
             function: actions/mcp/index.ts
             web: 'yes'
@@ -19,6 +21,8 @@ application:
             annotations:
               require-adobe-auth: false
               final: true
+              web-export: true
+              raw-http: true
           api-products:
             function: actions/api-products/index.ts
             web: 'yes'

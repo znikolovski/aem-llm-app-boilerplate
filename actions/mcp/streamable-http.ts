@@ -1,16 +1,9 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { getMethod, parseJsonBody } from "../shared/http";
+import { corsHeaders, getMethod, parseJsonBody } from "../shared/http";
 import { RuntimeParams, RuntimeResponse } from "../shared/types";
 import { createWebsiteMcpServer } from "./website-mcp-server";
 
 const STREAMABLE_ACCEPT = "application/json, text/event-stream";
-
-const corsHeaders: Record<string, string> = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-  "access-control-allow-headers": "content-type,authorization,mcp-session-id,mcp-protocol-version,accept",
-  "access-control-expose-headers": "mcp-session-id"
-};
 
 function mergeHeaders(transportHeaders: Record<string, string>): Record<string, string> {
   return { ...corsHeaders, ...transportHeaders };

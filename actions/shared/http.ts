@@ -1,9 +1,9 @@
 import { RuntimeParams, RuntimeResponse } from "./types";
 
-const corsHeaders = {
+export const corsHeaders = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET,POST,OPTIONS",
-  "access-control-allow-headers": "content-type,authorization,mcp-session-id",
+  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+  "access-control-allow-headers": "content-type,authorization,mcp-session-id,mcp-protocol-version,accept",
   "access-control-expose-headers": "mcp-session-id"
 };
 

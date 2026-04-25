@@ -1,5 +1,6 @@
 import { ConfigError } from "./config";
 import { errorResponse, getMethod, noContentResponse } from "./http";
+import { normalizeOpenWhiskWebResponse } from "./openwhisk-http";
 import { RuntimeParams, RuntimeResponse } from "./types";
 
 export async function runAction(
@@ -7,13 +8,13 @@ export async function runAction(
   handler: () => Promise<RuntimeResponse>
 ): Promise<RuntimeResponse> {
   if (getMethod(params) === "OPTIONS") {
-    return noContentResponse();
+    return normalizeOpenWhiskWebResponse(noContentResponse());
   }
 
   try {
-    return await handler();
+    return normalizeOpenWhiskWebResponse(await handler());
   } catch (error) {
-    return errorResponse(error, statusFromError(error));
+    return normalizeOpenWhiskWebResponse(errorResponse(error, statusFromError(error)));
   }
 }
 
