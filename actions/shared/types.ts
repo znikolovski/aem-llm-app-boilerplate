@@ -9,7 +9,12 @@ export interface RuntimeParams {
 export interface RuntimeResponse {
   statusCode: number;
   headers: Record<string, string>;
-  body?: string;
+  /**
+   * For web actions, OpenWhisk's `resultAsHttp` path handles JSON more reliably when `body`
+   * is a structured JSON value (object/array) than when it is a string with `Content-Type:
+   * application/json`. Non-JSON responses should use a string (e.g. HTML or plain text).
+   */
+  body?: unknown;
 }
 
 export interface AppConfig {

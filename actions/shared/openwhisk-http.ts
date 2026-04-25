@@ -50,9 +50,35 @@ export function normalizeOpenWhiskWebResponse(response: RuntimeResponse): Runtim
     headers[key] = value;
   }
 
-  const out: RuntimeResponse = { statusCode, headers };
+  const contentType = headers["content-type"] ?? "";
+  const isJsonFamily =
+    contentType.includes("application/json") || contentType.includes("+json");
+
+  let body: unknown = undefined;
   if (response.body !== undefined && response.body !== null) {
-    out.body = typeof response.body === "string" ? response.body : String(response.body);
+    if (typeof response.body === "string") {
+      const s = response.body;
+      if (s.length === 0) {
+        body = undefined;
+      } else if (isJsonFamily) {
+        try {
+          body = JSON.parse(s);
+        } catch {
+          body = s;
+        }
+      } else {
+        body = s;
+      }
+    } else if (typeof response.body === "object") {
+      body = response.body;
+    } else {
+      body = String(response.body);
+    }
+  }
+
+  const out: RuntimeResponse = { statusCode, headers };
+  if (body !== undefined && body !== null) {
+    out.body = body;
   }
   return out;
 }

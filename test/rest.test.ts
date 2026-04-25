@@ -7,6 +7,7 @@ import { main as detailMain } from "../actions/api-product-detail/index";
 import { main as whatsNewMain } from "../actions/api-whats-new/index";
 import { main as openApiMain } from "../actions/openapi/index";
 import { RuntimeParams } from "../actions/shared/types";
+import { runtimeJsonBody } from "./runtime-json-body";
 
 const fixtures = join(process.cwd(), "test", "fixtures");
 const indexPayload = readFileSync(join(fixtures, "index.json"), "utf8");
@@ -27,7 +28,7 @@ function params(extra: RuntimeParams = {}): RuntimeParams {
 test("REST product list returns data and count", async () => {
   mockFetch({ "https://www.example.com/query-index.json": indexPayload });
   const response = await productsMain(params({ category: "Credit Cards" }));
-  const body = JSON.parse(response.body || "{}");
+  const body = runtimeJsonBody(response) as { count: number; data: Array<{ title: string }> };
   assert.equal(response.statusCode, 200);
   assert.equal(body.count, 1);
   assert.equal(body.data[0].title, "Platinum Rewards Card");
@@ -39,7 +40,7 @@ test("REST product detail returns product detail", async () => {
     "https://www.example.com/products/platinum-rewards-card": productHtml
   });
   const response = await detailMain(params({ id: "platinum-rewards-card" }));
-  const body = JSON.parse(response.body || "{}");
+  const body = runtimeJsonBody(response) as { id: string; ctaLinks: Array<{ label: string }> };
   assert.equal(response.statusCode, 200);
   assert.equal(body.id, "platinum-rewards-card");
   assert.ok(body.ctaLinks.some((link: { label: string }) => link.label === "Apply now"));
@@ -51,14 +52,14 @@ test("REST what's new returns homepage summary", async () => {
     "https://www.example.com/": homeHtml
   });
   const response = await whatsNewMain(params());
-  const body = JSON.parse(response.body || "{}");
+  const body = runtimeJsonBody(response) as { title: string };
   assert.equal(response.statusCode, 200);
   assert.equal(body.title, "SecurBank");
 });
 
 test("OpenAPI route returns product paths", async () => {
   const response = await openApiMain(params());
-  const body = JSON.parse(response.body || "{}");
+  const body = runtimeJsonBody(response) as { paths: Record<string, unknown>; openapi: string };
   assert.equal(response.statusCode, 200);
   assert.ok(body.paths["/v1/products"]);
   assert.equal(body.openapi, "3.1.0");
