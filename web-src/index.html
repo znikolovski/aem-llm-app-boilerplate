@@ -72,10 +72,11 @@
     <h2>Local Smoke Request</h2>
     <pre><code>curl -s "$APP_URL/v1/products?category=credit%20cards" | jq</code></pre>
 
-    <h2>MCP Initialize</h2>
+    <h2>MCP Initialize (Streamable HTTP)</h2>
     <pre><code>curl -s "$APP_URL/mcp" \
   -H "content-type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}' | jq</code></pre>
+  -H "accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}' | jq</code></pre>
   </main>
 </body>
 </html>
