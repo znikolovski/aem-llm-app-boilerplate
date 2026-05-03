@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { main as chatMain } from "../actions/chat/index";
 import { main as recommendMain } from "../actions/recommend/index";
+import { main as spotlightMain } from "../actions/spotlight/index";
 import { RuntimeParams } from "../actions/shared/types";
 import { runtimeJsonBody } from "./runtime-json-body";
 
@@ -60,4 +61,21 @@ test("recommend rejects missing location", async () => {
 test("recommend rejects GET", async () => {
   const response = await recommendMain(params({ __ow_method: "GET" }));
   assert.equal(response.statusCode, 405);
+});
+
+test("spotlight returns UI blocks", async () => {
+  const response = await spotlightMain(
+    params({
+      __ow_body: JSON.stringify({ topic: "Summer family promo" })
+    })
+  );
+  assert.equal(response.statusCode, 200);
+  const body = runtimeJsonBody(response) as { ui: Array<{ type: string }> };
+  assert.ok(Array.isArray(body.ui));
+  assert.ok(body.ui.some((b) => b.type === "card"));
+});
+
+test("spotlight rejects missing topic", async () => {
+  const response = await spotlightMain(params({ __ow_body: JSON.stringify({}) }));
+  assert.equal(response.statusCode, 400);
 });

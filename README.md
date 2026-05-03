@@ -5,7 +5,7 @@ Greenfield App Builder project for **streaming LLM orchestration** (OpenAI Respo
 ## Stack
 
 - **Actions**: `chat` (SSE stream of Responses events), `recommend` (JSON `{ ui: UIBlock[] }` demo).
-- **Web**: React + React Router, `renderers/uiRenderer.jsx`, brand config in `web-src/src/brand.json`.
+- **Web**: React + React Router with a **split chat | experience** layout, **parallel tool panels** (stacked sessions from the stream), **dynamic routes** from `brand.toolRoutes`, and `renderers/uiRenderer.jsx` for the UI contract.
 - **APIs**: `POST /v1/chat`, `POST /v1/recommend` (see `app.config.yaml`).
 
 ## Requirements

@@ -26,6 +26,14 @@ application:
               require-adobe-auth: false
               final: true
               web-export: true
+          spotlight:
+            function: actions/spotlight/index.ts
+            web: 'yes'
+            runtime: nodejs:22
+            annotations:
+              require-adobe-auth: false
+              final: true
+              web-export: true
         apis:
           llm-app-api:
             v1:
@@ -35,5 +43,9 @@ application:
                   response: http
               recommend:
                 recommend:
+                  method: post
+                  response: http
+              spotlight:
+                spotlight:
                   method: post
                   response: http

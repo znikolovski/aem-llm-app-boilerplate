@@ -1,10 +1,11 @@
 {
   "kicker": "Adobe App Builder",
   "appTitle": "LLM App Boilerplate",
-  "appSubtitle": "Streaming chat, tool actions, and UI blocks you can theme per brand.",
+  "appSubtitle": "Split chat and experience: streaming decisions, parallel tool panels, and route-per-tool deep links.",
   "apiVersionPath": "/v1",
   "toolRoutes": {
-    "recommend": "/recommendation"
+    "recommend": { "path": "recommendation", "label": "Stays & trips" },
+    "spotlight": { "path": "spotlight", "label": "Campaign spotlight" }
   },
   "theme": {
     "accent": "#0f766e",

@@ -61,9 +61,14 @@ button {
   grid-template-columns: 1fr;
 }
 
+.shell-body.split-chat-experience {
+  min-height: min(100vh, 900px);
+}
+
 @media (min-width: 900px) {
-  .shell-body {
-    grid-template-columns: minmax(320px, 1fr) minmax(0, 1.2fr);
+  .shell-body.split-chat-experience {
+    grid-template-columns: minmax(300px, 38vw) minmax(0, 1fr);
+    align-items: stretch;
   }
 }
 
@@ -82,30 +87,126 @@ button {
   letter-spacing: 0.04em;
 }
 
+.split-pane-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .chat-wrap {
-  padding: 16px;
+  padding: 16px 18px 20px;
   border-bottom: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 280px;
+  min-height: min(60vh, 640px);
 }
 
 @media (min-width: 900px) {
   .chat-wrap {
     border-bottom: none;
     border-right: 1px solid var(--line);
-    min-height: 100%;
+    min-height: calc(100vh - 120px);
   }
+}
+
+.experience-column {
+  display: flex;
+  flex-direction: column;
+  min-height: min(50vh, 560px);
+}
+
+@media (min-width: 900px) {
+  .experience-column {
+    min-height: calc(100vh - 120px);
+  }
+}
+
+.experience-column-head {
+  padding: 14px 18px 0;
+}
+
+.experience-column-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 18px 24px;
+  overflow: auto;
+}
+
+.experience-outlet {
+  flex: 0 1 auto;
+  margin-top: auto;
+}
+
+.tool-stack {
+  flex: 0 1 auto;
+}
+
+.tool-stack-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tool-stack-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tool-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tool-panel-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.btn-dismiss {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  line-height: 1;
+  font-size: 18px;
+  padding: 0;
+}
+
+.btn-dismiss:hover {
+  border-color: var(--accent);
+}
+
+.route-list {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .messages {
   flex: 1;
   overflow: auto;
-  max-height: min(52vh, 520px);
+  max-height: min(48vh, 480px);
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+@media (min-width: 900px) {
+  .messages {
+    max-height: none;
+  }
 }
 
 .bubble {
@@ -155,10 +256,6 @@ button {
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-.experience {
-  padding: 16px 20px 32px;
 }
 
 .experience h2 {

@@ -22,6 +22,22 @@ const RECOMMEND_TOOL = {
   }
 };
 
+const SPOTLIGHT_TOOL = {
+  type: "function" as const,
+  name: "spotlight",
+  description:
+    "Fetch structured UI blocks for a marketing or editorial spotlight. Call when the user asks to highlight a campaign, seasonal theme, product line, or audience-specific message.",
+  strict: false,
+  parameters: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      topic: { type: "string", description: "Short label for what to spotlight (campaign, season, segment, etc.)." }
+    },
+    required: ["topic"]
+  }
+};
+
 export async function main(params: RuntimeParams): Promise<RuntimeResponse> {
   return runAction(params, async () => {
     if (getMethod(params) !== "POST") {
@@ -59,8 +75,11 @@ export async function main(params: RuntimeParams): Promise<RuntimeResponse> {
       stream = client.responses.stream({
         model,
         input: message,
-        instructions: `You are a helpful assistant for ${brand}. When users ask for hotels, lodging, or travel ideas in a location, call the recommend tool with a clear location string. Keep assistant prose brief when a tool call will follow.`,
-        tools: [RECOMMEND_TOOL],
+        instructions: `You are a helpful assistant for ${brand}.
+- For hotels, travel, or place-based ideas: call recommend with a clear location string.
+- For campaigns, promos, seasonal highlights, or “spotlight” style asks: call spotlight with a concise topic label.
+You may call multiple tools in one turn if the user clearly wants both structured experiences. Keep assistant prose brief when tools will supply the rich UI.`,
+        tools: [RECOMMEND_TOOL, SPOTLIGHT_TOOL],
         tool_choice: "auto"
       });
     } catch (error) {

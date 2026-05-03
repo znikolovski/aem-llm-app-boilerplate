@@ -1,40 +1,35 @@
 import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import brand from "../brand.json";
+import { useExperienceSessions } from "../context/ExperienceSessionsContext.jsx";
+import { toolRouteByName } from "../lib/toolRouting.js";
 import { chatStream } from "../services/api.js";
 
-function parseRecommendArgs(argumentsStr) {
-  if (typeof argumentsStr !== "string" || !argumentsStr.trim()) {
+function resolveSessionId(item, outputIndex, idByOutputIndex) {
+  if (item?.call_id && String(item.call_id).trim()) {
+    return String(item.call_id).trim();
+  }
+  const key = `o:${outputIndex}`;
+  if (!idByOutputIndex.current[key]) {
+    idByOutputIndex.current[key] =
+      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}-${Math.random()}`;
+  }
+  return idByOutputIndex.current[key];
+}
+
+function parseFunctionCallArgs(item) {
+  const raw = typeof item.arguments === "string" ? item.arguments : "";
+  if (!raw.trim()) {
     return null;
   }
   try {
-    const args = JSON.parse(argumentsStr);
-    if (args && typeof args.location === "string" && args.location.trim()) {
-      return args.location.trim();
-    }
+    return JSON.parse(raw);
   } catch {
     return null;
   }
-  return null;
-}
-
-function extractRecommendLocation(output) {
-  if (!Array.isArray(output)) {
-    return null;
-  }
-  for (const item of output) {
-    if (item && item.type === "function_call" && item.name === "recommend") {
-      const loc = parseRecommendArgs(typeof item.arguments === "string" ? item.arguments : "");
-      if (loc) {
-        return loc;
-      }
-    }
-  }
-  return null;
 }
 
 export function Chat() {
-  const navigate = useNavigate();
+  const { beginSession, setSessionParams } = useExperienceSessions();
   const [turns, setTurns] = useState([]);
   const [draft, setDraft] = useState("");
   const [streamingText, setStreamingText] = useState("");
@@ -42,8 +37,7 @@ export function Chat() {
   const [error, setError] = useState("");
   const abortRef = useRef(null);
   const streamBuf = useRef("");
-
-  const recommendPath = brand.toolRoutes?.recommend || "/recommendation";
+  const idByOutputIndex = useRef({});
 
   const handleEvent = useCallback(
     (event) => {
@@ -60,34 +54,47 @@ export function Chat() {
 
       if (event.type === "response.output_item.added") {
         const item = event.item;
-        if (item?.type === "function_call" && item.name === "recommend") {
-          navigate(recommendPath, { state: { phase: "skeleton" } });
+        if (item?.type === "function_call" && toolRouteByName(brand.toolRoutes, item.name)) {
+          const id = resolveSessionId(item, event.output_index, idByOutputIndex);
+          beginSession(id, item.name);
         }
         return;
       }
 
       if (event.type === "response.output_item.done") {
         const item = event.item;
-        if (item?.type === "function_call" && item.name === "recommend") {
-          const loc = parseRecommendArgs(typeof item.arguments === "string" ? item.arguments : "");
-          if (loc) {
-            navigate(recommendPath, { replace: true, state: { phase: "ready", location: loc } });
-          }
+        if (item?.type === "function_call" && toolRouteByName(brand.toolRoutes, item.name)) {
+          const id = resolveSessionId(item, event.output_index, idByOutputIndex);
+          const params = parseFunctionCallArgs(item);
+          setSessionParams(id, item.name, params);
         }
         return;
       }
 
       if (event.type === "response.output_tool_call") {
-        if (event.name === "recommend") {
-          navigate(recommendPath, { state: { phase: "skeleton" } });
+        const name = typeof event.name === "string" ? event.name : "";
+        if (name && toolRouteByName(brand.toolRoutes, name)) {
+          const id = resolveSessionId({ call_id: event.call_id }, event.output_index ?? 0, idByOutputIndex);
+          beginSession(id, name);
         }
         return;
       }
 
       if (event.type === "response.completed") {
-        const loc = extractRecommendLocation(event.response?.output);
-        if (loc) {
-          navigate(recommendPath, { replace: true, state: { phase: "ready", location: loc } });
+        const output = event.response?.output;
+        if (!Array.isArray(output)) {
+          return;
+        }
+        for (const item of output) {
+          if (item?.type !== "function_call" || !toolRouteByName(brand.toolRoutes, item.name)) {
+            continue;
+          }
+          const id = item.call_id && String(item.call_id).trim() ? String(item.call_id).trim() : null;
+          if (!id) {
+            continue;
+          }
+          const params = parseFunctionCallArgs(item);
+          setSessionParams(id, item.name, params);
         }
         return;
       }
@@ -96,7 +103,7 @@ export function Chat() {
         setError(event.error || "Stream error.");
       }
     },
-    [navigate, recommendPath]
+    [beginSession, setSessionParams]
   );
 
   async function onSubmit(e) {
@@ -109,6 +116,7 @@ export function Chat() {
     setError("");
     setDraft("");
     setBusy(true);
+    idByOutputIndex.current = {};
     setTurns((t) => [...t, { role: "user", text }]);
     streamBuf.current = "";
     setStreamingText("");
@@ -141,7 +149,12 @@ export function Chat() {
 
   return (
     <section className="chat-wrap">
-      <div className="kicker">Chat</div>
+      <div className="split-pane-title">
+        <span className="kicker">Chat</span>
+        <span className="muted" style={{ fontSize: 13 }}>
+          Stream + tool calls
+        </span>
+      </div>
       <div className="messages">
         {turns.map((m, i) => (
           <div key={i} className={`bubble ${m.role === "user" ? "user" : ""}`}>
@@ -153,10 +166,10 @@ export function Chat() {
       {error ? <div className="err">{error}</div> : null}
       <form className="chat-form" onSubmit={onSubmit}>
         <textarea
-          rows={2}
+          rows={3}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Try: Find hotels in Fiji"
+          placeholder="Try: Find hotels in Fiji. Or: Spotlight our summer campaign for families."
           disabled={busy}
         />
         {busy ? (

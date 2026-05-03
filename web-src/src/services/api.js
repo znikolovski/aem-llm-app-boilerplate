@@ -46,6 +46,26 @@ export async function chatStream(message, { signal, onEvent } = {}) {
   await readSseStream(res.body, onEvent);
 }
 
+export async function spotlight(params, { signal } = {}) {
+  const res = await fetch(apiUrl("spotlight"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(params),
+    signal
+  });
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("Spotlight response was not JSON.");
+  }
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
 export async function recommend(params, { signal } = {}) {
   const res = await fetch(apiUrl("recommend"), {
     method: "POST",
