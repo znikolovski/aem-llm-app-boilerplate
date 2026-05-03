@@ -1,31 +1,23 @@
 # Adobe App Builder LLM App Boilerplate
 
-This is a greenfield Adobe App Builder boilerplate for exposing an Edge Delivery Services website to LLM hosts. It provides:
+Greenfield App Builder project for **streaming LLM orchestration** (OpenAI Responses API), **tool actions** that return a **shared UI-block contract**, and a **React SPA** that consumes SSE, routes on tool intent, and renders real components (not HTML from the model).
 
-- A public read-only MCP endpoint for portable MCP Apps-compatible hosts.
-- ChatGPT-compatible rich UI metadata for product lists, product details, and homepage summaries.
-- REST and OpenAPI fallbacks for hosts that do not speak MCP.
-- A small normalization layer that turns an EDS-style site index into product and homepage data.
+## Stack
+
+- **Actions**: `chat` (SSE stream of Responses events), `recommend` (JSON `{ ui: UIBlock[] }` demo).
+- **Web**: React + React Router, `renderers/uiRenderer.jsx`, brand config in `web-src/src/brand.json`.
+- **APIs**: `POST /v1/chat`, `POST /v1/recommend` (see `app.config.yaml`).
 
 ## Requirements
 
-- Node.js 22 or newer.
-- Adobe AIO CLI configured for App Builder deployment.
-- A site index endpoint, usually an EDS `query-index.json` style response.
+- Node.js 22+.
+- Adobe I/O CLI (`aio`) for `app:dev` / `app:build` / `app:deploy`.
 
 ## Configure
 
-Copy `.env.example` to `.env` and set:
+Copy `.env.example` to `.env` and set at least `OPENAI_API_KEY`. Optional: `OPENAI_MODEL`, `BRAND_DISPLAY_NAME`.
 
-```bash
-SITE_INDEX_URL=https://main--repo--owner.aem.page/query-index.json
-SITE_BASE_URL=https://www.example.com
-HOMEPAGE_PATH=/
-INDEX_CACHE_TTL_SECONDS=300
-CONVERSATION_URL_TEMPLATE=
-```
-
-`SITE_INDEX_URL` may be any configured HTTP(S) index endpoint. Product and homepage page fetches are restricted to the same origin as `SITE_BASE_URL`.
+Per-brand theming: edit `web-src/src/brand.json` (titles, accent colors, `toolRoutes`, `apiVersionPath`). For cross-origin APIs, set `window.__LLM_API_BASE__` before the bundle loads. `aio app build` may generate `web-src/src/config.json` with action URLs; that file is gitignored—defaults use same-origin `/v1/...` paths suitable for `aio app dev`.
 
 ## Run
 
@@ -36,54 +28,9 @@ npm run build
 npm run app:dev
 ```
 
-Deploy with:
+Deploy with `npm run app:deploy` once your AIO workspace is linked.
 
-```bash
-aio login
-aio app use path/to/workspace-config.json
-npm run app:deploy
-```
+## Notes
 
-App Builder API Gateway routes are configured under the `v1` base path:
-
-- `POST /v1/mcp`
-- `GET /v1/products?category=&q=&limit=`
-- `GET /v1/products/{id}`
-- `GET /v1/whats-new`
-- `GET /v1/openapi.json`
-
-Depending on how the route is served locally or deployed, App Builder may prefix those paths with its runtime/API namespace.
-
-## MCP Tools
-
-- `website.list_products`: discover products from the site index, optionally filtered by category or text query.
-- `website.get_product_details`: fetch one product page and extract details, key facts, CTA links, and deep links.
-- `website.get_homepage_summary`: fetch the configured homepage and return a structured "what's new" summary.
-- `website.render_product_list`: render product cards in an MCP Apps UI iframe.
-- `website.render_product_detail`: render a rich product detail view.
-- `website.render_whats_new`: render the homepage summary.
-
-The render tools advertise `_meta.ui.resourceUri` for MCP Apps portability and `_meta["openai/outputTemplate"]` for ChatGPT compatibility.
-
-## Index Shape
-
-The index may be either:
-
-```json
-[{ "path": "/products/card", "title": "Example Card" }]
-```
-
-or:
-
-```json
-{ "data": [{ "path": "/products/card", "title": "Example Card" }] }
-```
-
-Useful fields include `path`, `url`, `title`, `description`, `category`, `tags`, `image`, and `lastModified`. If the index does not clearly mark product pages, the boilerplate falls back to all titled, non-homepage records.
-
-## Security Notes
-
-- V1 is public and read-only.
-- Runtime actions do not require Adobe auth.
-- The backend fetches only the configured index URL and same-origin website pages derived from `SITE_BASE_URL`.
-- No LLM API calls are made by the backend; summarization is structured extraction for the host model to narrate.
+- Streaming uses **Server-Sent Events** (`text/event-stream`) from the `chat` action; the SPA parses `data:` JSON lines and maps `event.type` to UI and navigation.
+- Replace `demoHotels` in `actions/recommend/index.ts` with your own data sources per deployment.

@@ -1,82 +1,12 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Website LLM App Boilerplate</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #fbfbfb;
-      --fg: #171717;
-      --muted: #5f6368;
-      --line: #d8dce2;
-      --panel: #ffffff;
-      --accent: #0f766e;
-      --code: #f0f3f5;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #101214;
-        --fg: #f4f4f5;
-        --muted: #a1a1aa;
-        --line: #30343a;
-        --panel: #171a1f;
-        --accent: #2dd4bf;
-        --code: #22262d;
-      }
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--fg); line-height: 1.55; }
-    main { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 36px 0; }
-    header { margin-bottom: 28px; }
-    h1 { font-size: clamp(28px, 5vw, 48px); line-height: 1; margin: 0 0 12px; letter-spacing: 0; }
-    h2 { margin: 28px 0 8px; font-size: 20px; }
-    p { margin: 0 0 12px; color: var(--muted); }
-    a { color: var(--accent); }
-    code, pre { background: var(--code); border-radius: 6px; }
-    code { padding: 2px 5px; }
-    pre { padding: 14px; overflow: auto; border: 1px solid var(--line); }
-    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-    .kicker { color: var(--accent); font-size: 12px; font-weight: 800; text-transform: uppercase; }
-  </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLM App</title>
+  <script type="module" src="./src/index.jsx"></script>
 </head>
 <body>
-  <main>
-    <header>
-      <div class="kicker">Adobe App Builder</div>
-      <h1>Website LLM App Boilerplate</h1>
-      <p>Public, read-only product and homepage tools for MCP Apps-compatible LLM hosts, with REST fallbacks for other integrations.</p>
-    </header>
-
-    <section class="grid">
-      <div class="panel">
-        <h2>REST</h2>
-        <p><code>GET /v1/products</code></p>
-        <p><code>GET /v1/products/{id}</code></p>
-        <p><code>GET /v1/whats-new</code></p>
-      </div>
-      <div class="panel">
-        <h2>MCP</h2>
-        <p><code>POST /mcp</code></p>
-        <p>Tools expose listing, detail, homepage summary, and rich render surfaces.</p>
-      </div>
-      <div class="panel">
-        <h2>Config</h2>
-        <p>Set <code>SITE_INDEX_URL</code> and <code>SITE_BASE_URL</code> before running or deploying.</p>
-      </div>
-    </section>
-
-    <h2>Local Smoke Request</h2>
-    <pre><code>curl -s "$APP_URL/v1/products?category=credit%20cards" | jq</code></pre>
-
-    <h2>MCP Initialize (Streamable HTTP)</h2>
-    <pre><code>curl -s "$APP_URL/mcp" \
-  -H "content-type: application/json" \
-  -H "accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}' | jq</code></pre>
-  </main>
+  <div id="root"></div>
 </body>
 </html>

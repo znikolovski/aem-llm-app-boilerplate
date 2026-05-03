@@ -1,3 +1,4 @@
+import type { Readable } from "node:stream";
 import { RuntimeParams, RuntimeResponse } from "./types";
 
 export const corsHeaders = {
@@ -44,6 +45,23 @@ export function textResponse(body: string, statusCode = 200): RuntimeResponse {
     headers: {
       ...corsHeaders,
       "content-type": "text/plain; charset=utf-8"
+    },
+    body
+  };
+}
+
+/**
+ * Server-Sent Events stream for OpenWhisk web actions. Body must be a Node.js Readable.
+ */
+export function sseStreamResponse(body: Readable, headers: Record<string, string> = {}): RuntimeResponse {
+  return {
+    statusCode: 200,
+    headers: {
+      ...corsHeaders,
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+      ...headers
     },
     body
   };

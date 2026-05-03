@@ -1,0 +1,13 @@
+{
+  "kicker": "Adobe App Builder",
+  "appTitle": "LLM App Boilerplate",
+  "appSubtitle": "Streaming chat, tool actions, and UI blocks you can theme per brand.",
+  "apiVersionPath": "/v1",
+  "toolRoutes": {
+    "recommend": "/recommendation"
+  },
+  "theme": {
+    "accent": "#0f766e",
+    "accentDark": "#2dd4bf"
+  }
+}

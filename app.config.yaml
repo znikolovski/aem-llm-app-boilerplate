@@ -3,74 +3,37 @@ application:
   web: web-src
   runtimeManifest:
     packages:
-      llm-website-app:
+      llm-app:
         license: Apache-2.0
         inputs:
-          SITE_INDEX_URL: $SITE_INDEX_URL
-          SITE_BASE_URL: $SITE_BASE_URL
-          HOMEPAGE_PATH: $HOMEPAGE_PATH
-          INDEX_CACHE_TTL_SECONDS: $INDEX_CACHE_TTL_SECONDS
-          CONVERSATION_URL_TEMPLATE: $CONVERSATION_URL_TEMPLATE
+          OPENAI_API_KEY: $OPENAI_API_KEY
+          OPENAI_MODEL: $OPENAI_MODEL
+          BRAND_DISPLAY_NAME: $BRAND_DISPLAY_NAME
         actions:
-          # Match Adobe remote MCP template: raw-http keeps JSON-RPC in __ow_body;
-          # web-export marks a public web action. See generator-app-remote-mcp-server-generic.
-          mcp:
-            function: actions/mcp/index.ts
+          chat:
+            function: actions/chat/index.ts
             web: 'yes'
             runtime: nodejs:22
             annotations:
               require-adobe-auth: false
               final: true
               web-export: true
-              raw-http: true
-          api-products:
-            function: actions/api-products/index.ts
+          recommend:
+            function: actions/recommend/index.ts
             web: 'yes'
             runtime: nodejs:22
             annotations:
               require-adobe-auth: false
               final: true
-          api-product-detail:
-            function: actions/api-product-detail/index.ts
-            web: 'yes'
-            runtime: nodejs:22
-            annotations:
-              require-adobe-auth: false
-              final: true
-          api-whats-new:
-            function: actions/api-whats-new/index.ts
-            web: 'yes'
-            runtime: nodejs:22
-            annotations:
-              require-adobe-auth: false
-              final: true
-          openapi:
-            function: actions/openapi/index.ts
-            web: 'yes'
-            runtime: nodejs:22
-            annotations:
-              require-adobe-auth: false
-              final: true
+              web-export: true
         apis:
-          llm-website-api:
+          llm-app-api:
             v1:
-              mcp:
-                mcp:
+              chat:
+                chat:
                   method: post
                   response: http
-              products:
-                api-products:
-                  method: get
-                  response: http
-              products/{id}:
-                api-product-detail:
-                  method: get
-                  response: http
-              whats-new:
-                api-whats-new:
-                  method: get
-                  response: http
-              openapi.json:
-                openapi:
-                  method: get
+              recommend:
+                recommend:
+                  method: post
                   response: http

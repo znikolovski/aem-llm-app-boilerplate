@@ -1,0 +1,13 @@
+{
+  "name": "web-src",
+  "private": true,
+  "source": "index.html",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "parcel": "^2.13.3"
+  }
+}

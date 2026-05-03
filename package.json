@@ -2,8 +2,11 @@
   "name": "adobe-app-builder-llm-app-boilerplate",
   "version": "0.1.0",
   "private": true,
-  "description": "Adobe App Builder boilerplate for exposing Edge Delivery Services website products to LLM apps over MCP Apps and REST.",
+  "description": "Adobe App Builder boilerplate: streaming Responses API chat, tool actions, and a React SPA with a shared UI-block contract for multi-brand LLM apps.",
   "license": "Apache-2.0",
+  "workspaces": [
+    "web-src"
+  ],
   "scripts": {
     "build": "tsc --noEmit",
     "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js",
@@ -21,7 +24,6 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^3.25.76"
+    "openai": "^5.23.2"
   }
 }
