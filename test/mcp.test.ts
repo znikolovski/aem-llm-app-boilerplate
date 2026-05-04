@@ -19,6 +19,37 @@ function mcpParams(body: unknown, extra: RuntimeParams = {}): RuntimeParams {
   };
 }
 
+test("MCP GET without event-stream returns health JSON", async () => {
+  const response = await mcpMain({
+    __ow_method: "GET",
+    __ow_headers: { host: "localhost", accept: "application/json" },
+    __ow_path: "/v1/mcp",
+    BRAND_DISPLAY_NAME: "TestBrand"
+  });
+  assert.equal(response.statusCode, 200);
+  const data = runtimeJsonBody(response) as Record<string, unknown>;
+  assert.equal(data.status, "healthy");
+  assert.equal(data.server, "llm-app");
+});
+
+test("MCP GET with text/event-stream returns graceful SSE error line", async () => {
+  const response = await mcpMain({
+    __ow_method: "GET",
+    __ow_headers: { host: "localhost", accept: "text/event-stream" },
+    __ow_path: "/v1/mcp",
+    BRAND_DISPLAY_NAME: "TestBrand"
+  });
+  assert.equal(response.statusCode, 200);
+  const text =
+    typeof response.body === "string"
+      ? response.body
+      : Buffer.isBuffer(response.body)
+        ? response.body.toString("utf8")
+        : JSON.stringify(response.body);
+  assert.ok(text.includes("event: error"), text);
+  assert.ok(text.includes("SSE not supported"), text);
+});
+
 test("MCP initialize returns 200 and server metadata in body", async () => {
   const body = {
     jsonrpc: "2.0",

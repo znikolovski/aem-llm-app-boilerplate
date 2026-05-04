@@ -1,11 +1,14 @@
 import type { Readable } from "node:stream";
 import { RuntimeParams, RuntimeResponse } from "./types";
 
+/** Aligned with Adobe `generator-app-remote-mcp-server-generic` MCP web action CORS. */
 export const corsHeaders = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-  "access-control-allow-headers": "content-type,authorization,mcp-session-id,mcp-protocol-version,accept",
-  "access-control-expose-headers": "mcp-session-id"
+  "access-control-allow-methods": "GET, POST, OPTIONS, DELETE",
+  "access-control-allow-headers":
+    "Content-Type, Accept, Authorization, x-api-key, mcp-session-id, Last-Event-ID, mcp-protocol-version",
+  "access-control-expose-headers": "Content-Type, mcp-session-id, Last-Event-ID",
+  "access-control-max-age": "86400"
 };
 
 export function getMethod(params: RuntimeParams): string {
@@ -64,6 +67,15 @@ export function sseStreamResponse(body: Readable, headers: Record<string, string
       ...headers
     },
     body
+  };
+}
+
+/** CORS preflight: 200 + empty body (same pattern as Adobe MCP generator `handleOptionsRequest`). */
+export function preflightOkResponse(): RuntimeResponse {
+  return {
+    statusCode: 200,
+    headers: { ...corsHeaders },
+    body: ""
   };
 }
 

@@ -1,7 +1,5 @@
-import { Readable } from "node:stream";
 import { corsHeaders, getMethod } from "../shared/http";
 import { RuntimeParams, RuntimeResponse } from "../shared/types";
-import type { ReadableStream } from "node:stream/web";
 
 function headerRecord(params: RuntimeParams): Record<string, string> {
   const raw = params.__ow_headers;
@@ -24,13 +22,17 @@ function buildRequestUrl(params: RuntimeParams, headers: Headers): string {
   const path =
     typeof params.__ow_path === "string" && params.__ow_path.trim()
       ? params.__ow_path.trim()
-      : "/mcp";
+      : "/v1/mcp";
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${proto}://${host}${normalized}`;
 }
 
 /**
- * Build a Web `Request` from OpenWhisk web-action params (raw-http).
+ * Web `Request` for `WebStandardStreamableHTTPServerTransport` (OpenWhisk `raw-http` action).
+ * The official Adobe generator uses `StreamableHTTPServerTransport` + a req/res shim; current
+ * `@modelcontextprotocol/sdk` builds that path on `@hono/node-server`, which expects a full Node
+ * `IncomingMessage`. Using the Web-standard transport with the same options (`enableJsonResponse`,
+ * stateless session) matches runtime behavior while staying deployable on I/O Runtime.
  */
 export function openWhiskParamsToWebRequest(params: RuntimeParams): Request {
   const method = getMethod(params);
@@ -54,70 +56,21 @@ export function openWhiskParamsToWebRequest(params: RuntimeParams): Request {
   if (!headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
+  /** Match Adobe generator: SDK POST handler requires both media types in Accept. */
+  headers.set("accept", "application/json, text/event-stream");
 
   return new Request(url, { method, headers, body });
 }
 
-export function parsedJsonBodyForMcp(params: RuntimeParams): unknown | undefined {
-  const method = getMethod(params);
-  if (method !== "POST" && method !== "DELETE") {
-    return undefined;
-  }
-  const raw = params.__ow_body ?? params.body;
-  if (raw == null || raw === "") {
-    return undefined;
-  }
-  if (typeof raw === "object") {
-    return raw;
-  }
-  const text = String(raw);
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
-export type WebResponseOptions = {
-  /** When true and the response is `text/event-stream`, return a Node Readable instead of buffering. */
-  sseAsPassthroughStream?: boolean;
-};
-
-/**
- * Convert a Web `Response` from MCP Streamable HTTP into an OpenWhisk web result.
- */
-export async function webResponseToRuntimeResponse(
-  response: Response,
-  options: WebResponseOptions = {}
-): Promise<RuntimeResponse> {
+export async function webResponseToRuntimeResponse(response: Response): Promise<RuntimeResponse> {
   const statusCode = response.status;
   const headers: Record<string, string> = { ...corsHeaders };
   response.headers.forEach((value, key) => {
     const k = key.toLowerCase();
-    if (!k) {
-      return;
+    if (k) {
+      headers[k] = value;
     }
-    headers[k] = value;
   });
-
-  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-
-  /**
-   * Standalone MCP `GET` (SSE) must not be fully buffered with `response.text()` — that can
-   * block until the client disconnects. Pass a Node `Readable` through for GET only.
-   * `POST` may still use `text/event-stream` framing for a single JSON-RPC response; buffer it.
-   */
-  if (
-    options.sseAsPassthroughStream &&
-    contentType.includes("text/event-stream") &&
-    response.body
-  ) {
-    return {
-      statusCode,
-      headers,
-      body: Readable.fromWeb(response.body as import("stream/web").ReadableStream)
-    };
-  }
 
   const text = await response.text();
   return {

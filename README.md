@@ -21,10 +21,10 @@ Per-brand theming: edit `web-src/src/brand.json` (titles, accent colors, `toolRo
 
 ## MCP and ChatGPT
 
-- **Endpoints (after deploy)**: `POST https://<your-runtime-host>/v1/mcp` for JSON-RPC requests, and **`GET https://<your-runtime-host>/v1/mcp`** for the Streamable HTTP **SSE** stream (same path; second API mapping in `app.config.yaml`, per Adobe’s action-apis pattern).
-- The **`mcp`** action uses **`raw-http: true`** so JSON-RPC stays in `__ow_body`, per Adobe’s pattern for Streamable HTTP MCP.
+- **Endpoints (after deploy)**: **`POST https://<your-runtime-host>/v1/mcp`** carries JSON-RPC over Streamable HTTP with **`enableJsonResponse: true`** and a **fresh transport per request** (same serverless choices as [Adobe’s `generator-app-remote-mcp-server-generic`](https://github.com/adobe/generator-app-remote-mcp-server-generic)). This repo uses the SDK’s **`WebStandardStreamableHTTPServerTransport`** for POST because **`StreamableHTTPServerTransport`** in current `@modelcontextprotocol/sdk` builds on `@hono/node-server` and expects a full Node `IncomingMessage`; the generator’s minimal req/res shim does not receive responses correctly on SDK 1.29+.
+- **`GET /v1/mcp`** (second API mapping in `app.config.yaml`, same path as POST) returns a **health JSON** payload; if the client sends **`Accept: text/event-stream`**, the action returns a short **SSE error** explaining that SSE is not supported server-side—again matching the official generator’s serverless pattern.
+- The **`mcp`** action uses **`raw-http: true`**, **`limits`** (timeout / memory), and optional **`LOG_LEVEL`** like the generator’s `app.config.yaml`.
 - Tools exposed today: **`recommend`** (location → UI blocks), **`spotlight`** (topic → UI blocks). Extend `actions/mcp/create-server.ts` when you add actions.
-- **POST / DELETE** responses are buffered with `response.text()` (including SSE-framed JSON-RPC) so OpenWhisk gets a string body. **`GET` SSE** is returned as a Node **`Readable`** stream (not fully buffered) so long-lived MCP streams do not block the action.
 
 ### If you cannot use MCP
 
