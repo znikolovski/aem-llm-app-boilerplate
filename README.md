@@ -1,12 +1,12 @@
 # Adobe App Builder LLM App Boilerplate
 
-Greenfield App Builder project for **streaming LLM orchestration** (OpenAI Responses API), **tool actions** that return a **shared UI-block contract**, and a **React SPA** that consumes SSE, routes on tool intent, and renders real components (not HTML from the model).
+Greenfield App Builder project for **streaming LLM orchestration** (OpenAI Responses API), **tool actions** that return a **shared UI-block contract**, a **React SPA** that consumes SSE and routes on tool intent, and an **MCP (Model Context Protocol)** endpoint so hosts like **ChatGPT** can call the same tools over Streamable HTTP.
 
 ## Stack
 
-- **Actions**: `chat` (SSE stream of Responses events), `recommend` (JSON `{ ui: UIBlock[] }` demo).
-- **Web**: React + React Router with a **split chat | experience** layout, **parallel tool panels** (stacked sessions from the stream), **dynamic routes** from `brand.toolRoutes`, and `renderers/uiRenderer.jsx` for the UI contract.
-- **APIs**: `POST /v1/chat`, `POST /v1/recommend` (see `app.config.yaml`).
+- **Actions**: `chat` (SSE Responses stream), `recommend` / `spotlight` (JSON `{ ui: UIBlock[] }` demos), **`mcp`** (Streamable HTTP MCP server exposing those tools).
+- **Web**: React + React Router with a **split chat | experience** layout, **parallel tool panels**, **dynamic routes** from `brand.toolRoutes`, and `renderers/uiRenderer.jsx` for the UI contract.
+- **APIs**: `POST /v1/chat`, `POST /v1/recommend`, `POST /v1/spotlight`, **`POST /v1/mcp`** (see `app.config.yaml`).
 
 ## Requirements
 
@@ -18,6 +18,17 @@ Greenfield App Builder project for **streaming LLM orchestration** (OpenAI Respo
 Copy `.env.example` to `.env` and set at least `OPENAI_API_KEY`. Optional: `OPENAI_MODEL`, `BRAND_DISPLAY_NAME`.
 
 Per-brand theming: edit `web-src/src/brand.json` (titles, accent colors, `toolRoutes`, `apiVersionPath`). For cross-origin APIs, set `window.__LLM_API_BASE__` before the bundle loads. `aio app build` may generate `web-src/src/config.json` with action URLs; that file is gitignored—defaults use same-origin `/v1/...` paths suitable for `aio app dev`.
+
+## MCP and ChatGPT
+
+- **Endpoint (after deploy)**: `POST https://<your-runtime-host>/v1/mcp` (same API sequence as other `v1` actions; exact host comes from your App Builder / Runtime URL).
+- The **`mcp`** action uses **`raw-http: true`** so JSON-RPC stays in `__ow_body`, per Adobe’s pattern for Streamable HTTP MCP.
+- Tools exposed today: **`recommend`** (location → UI blocks), **`spotlight`** (topic → UI blocks). Extend `actions/mcp/create-server.ts` when you add actions.
+- The handler **materializes the full HTTP response** with `response.text()` before returning to OpenWhisk so the body is a normal string (reliable with `resultAsHttp`). Very large streamed MCP payloads are not optimized in this boilerplate—split tools or paginate if you outgrow it.
+
+### If you cannot use MCP
+
+For **Custom GPT** “Actions” style integrations, OpenAI’s other path is an **OpenAPI** description of REST tools (no MCP). This repo does not ship that YAML by default; you can describe `POST /v1/recommend` and `POST /v1/spotlight` (and auth) in an OpenAPI file and attach it to a Custom GPT instead of MCP.
 
 ## Run
 
@@ -33,4 +44,4 @@ Deploy with `npm run app:deploy` once your AIO workspace is linked.
 ## Notes
 
 - Streaming uses **Server-Sent Events** (`text/event-stream`) from the `chat` action; the SPA parses `data:` JSON lines and maps `event.type` to UI and navigation.
-- Replace `demoHotels` in `actions/recommend/index.ts` with your own data sources per deployment.
+- Replace demo UI in `actions/shared/demo-payloads.ts` (and wire real services from `recommend` / `spotlight` / MCP tool handlers).

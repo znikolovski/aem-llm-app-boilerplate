@@ -2,7 +2,7 @@
   "name": "adobe-app-builder-llm-app-boilerplate",
   "version": "0.1.0",
   "private": true,
-  "description": "Adobe App Builder boilerplate: streaming Responses API chat, tool actions, and a React SPA with a shared UI-block contract for multi-brand LLM apps.",
+  "description": "Adobe App Builder boilerplate: streaming chat, REST tool actions, MCP (Streamable HTTP) for ChatGPT-style hosts, and a React SPA with a shared UI-block contract.",
   "license": "Apache-2.0",
   "workspaces": [
     "web-src"
@@ -24,6 +24,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "openai": "^5.23.2"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "openai": "^5.23.2",
+    "zod": "^3.25.76"
   }
 }

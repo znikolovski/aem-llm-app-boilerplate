@@ -1,5 +1,6 @@
 import { runAction } from "../shared/action";
 import { readBrandDisplayName } from "../shared/llm-config";
+import { buildSpotlightUiBlocks } from "../shared/demo-payloads";
 import { getMethod, jsonResponse, parseJsonBody, textResponse } from "../shared/http";
 import type { RecommendToolResponse } from "../shared/ui-blocks";
 import { RuntimeParams, RuntimeResponse } from "../shared/types";
@@ -27,29 +28,9 @@ export async function main(params: RuntimeParams): Promise<RuntimeResponse> {
 
     const brand = readBrandDisplayName(params);
     const payload: RecommendToolResponse = {
-      ui: demoSpotlight(topic, brand)
+      ui: buildSpotlightUiBlocks(topic, brand)
     };
 
     return jsonResponse(payload);
   });
-}
-
-function demoSpotlight(topic: string, brand: string): RecommendToolResponse["ui"] {
-  const safe = topic.replace(/</g, "");
-  return [
-    {
-      type: "text",
-      content: `Spotlight for “${safe}” (${brand} boilerplate). Swap this action for real merchandising or editorial APIs.`
-    },
-    {
-      type: "card",
-      title: "Hero placement",
-      body: `Primary slot aligned to: ${safe}. CTA and imagery should come from your headless source, not the LLM.`
-    },
-    {
-      type: "card",
-      title: "Supporting tiles",
-      body: "Secondary promo tiles, A/B variants, or loyalty hooks — keep them as structured blocks like this."
-    }
-  ];
 }

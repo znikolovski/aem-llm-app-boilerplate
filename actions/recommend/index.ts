@@ -1,11 +1,12 @@
 import { runAction } from "../shared/action";
 import { readBrandDisplayName } from "../shared/llm-config";
+import { buildRecommendUiBlocks } from "../shared/demo-payloads";
 import { getMethod, jsonResponse, parseJsonBody, textResponse } from "../shared/http";
 import type { RecommendToolResponse } from "../shared/ui-blocks";
 import { RuntimeParams, RuntimeResponse } from "../shared/types";
 
 /**
- * Example tool action: replace `demoHotels` with real fetch / commerce / CMS logic per brand.
+ * Example tool action: replace `buildRecommendUiBlocks` with real fetch / commerce / CMS logic per brand.
  */
 export async function main(params: RuntimeParams): Promise<RuntimeResponse> {
   return runAction(params, async () => {
@@ -27,37 +28,9 @@ export async function main(params: RuntimeParams): Promise<RuntimeResponse> {
 
     const brand = readBrandDisplayName(params);
     const payload: RecommendToolResponse = {
-      ui: demoHotels(location, brand)
+      ui: buildRecommendUiBlocks(location, brand)
     };
 
     return jsonResponse(payload);
   });
-}
-
-function demoHotels(location: string, brand: string): RecommendToolResponse["ui"] {
-  const place = location.replace(/</g, "");
-  return [
-    {
-      type: "text",
-      content: `Sample results for “${place}” (${brand} boilerplate — wire your own data source).`
-    },
-    {
-      type: "card",
-      title: `${place} — Harbor View`,
-      body: "Waterfront rooms, rooftop lounge, and easy airport access. Replace with real catalog data."
-    },
-    {
-      type: "card",
-      title: `${place} — Garden Inn`,
-      body: "Quiet courtyard, family suites, complimentary breakfast. Demo card for UI contract testing."
-    },
-    {
-      type: "table",
-      columns: ["Property", "Neighborhood", "Notes"],
-      rows: [
-        ["Harbor View", "Waterfront", "Demo row"],
-        ["Garden Inn", "Old Town", "Demo row"]
-      ]
-    }
-  ];
 }

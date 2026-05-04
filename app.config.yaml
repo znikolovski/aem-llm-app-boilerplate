@@ -34,6 +34,15 @@ application:
               require-adobe-auth: false
               final: true
               web-export: true
+          mcp:
+            function: actions/mcp/index.ts
+            web: 'yes'
+            runtime: nodejs:22
+            annotations:
+              require-adobe-auth: false
+              final: true
+              web-export: true
+              raw-http: true
         apis:
           llm-app-api:
             v1:
@@ -47,5 +56,9 @@ application:
                   response: http
               spotlight:
                 spotlight:
+                  method: post
+                  response: http
+              mcp:
+                mcp:
                   method: post
                   response: http
