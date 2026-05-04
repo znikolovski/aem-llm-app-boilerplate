@@ -1,5 +1,8 @@
-# Agent Guide — `aem-llm-app-boilerplate`
+# Agent instructions — `aem-llm-app-boilerplate`
 
+> **Naming:** `AGENTS.md` is the canonical repo-root file for coding-agent context.  
+> **`CLAUDE.md`** exists as a thin pointer for Claude Code and other tools that look for that filename by default.
+>
 > This file is read by AI coding agents (e.g. Studio's chat
 > orchestrator) **after they scaffold a new app from this repo**. It
 > describes the contracts between the server actions, the streaming
