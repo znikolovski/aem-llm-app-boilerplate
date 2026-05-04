@@ -62,3 +62,9 @@ application:
                 mcp:
                   method: post
                   response: http
+          llm-app-mcp-get:
+            v1:
+              mcp:
+                mcp:
+                  method: get
+                  response: http

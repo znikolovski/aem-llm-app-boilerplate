@@ -26,7 +26,9 @@ export async function main(params: RuntimeParams): Promise<RuntimeResponse> {
     try {
       await mcp.connect(transport);
       const response = await transport.handleRequest(request, { parsedBody });
-      return await webResponseToRuntimeResponse(response);
+      return await webResponseToRuntimeResponse(response, {
+        sseAsPassthroughStream: method === "GET"
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "MCP handler failed.";
       return jsonResponse({ error: message }, 500);

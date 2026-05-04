@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { corsHeaders, getMethod } from "../shared/http";
 import { RuntimeParams, RuntimeResponse } from "../shared/types";
 import type { ReadableStream } from "node:stream/web";
@@ -77,10 +78,18 @@ export function parsedJsonBodyForMcp(params: RuntimeParams): unknown | undefined
   }
 }
 
+export type WebResponseOptions = {
+  /** When true and the response is `text/event-stream`, return a Node Readable instead of buffering. */
+  sseAsPassthroughStream?: boolean;
+};
+
 /**
  * Convert a Web `Response` from MCP Streamable HTTP into an OpenWhisk web result.
  */
-export async function webResponseToRuntimeResponse(response: Response): Promise<RuntimeResponse> {
+export async function webResponseToRuntimeResponse(
+  response: Response,
+  options: WebResponseOptions = {}
+): Promise<RuntimeResponse> {
   const statusCode = response.status;
   const headers: Record<string, string> = { ...corsHeaders };
   response.headers.forEach((value, key) => {
@@ -91,11 +100,25 @@ export async function webResponseToRuntimeResponse(response: Response): Promise<
     headers[k] = value;
   });
 
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+
   /**
-   * Buffer the full MCP response for OpenWhisk `resultAsHttp` compatibility.
-   * Streamable HTTP may use SSE; materializing as a string avoids opaque web-stream
-   * bodies that do not always round-trip as Node `Readable` instances in this runtime.
+   * Standalone MCP `GET` (SSE) must not be fully buffered with `response.text()` — that can
+   * block until the client disconnects. Pass a Node `Readable` through for GET only.
+   * `POST` may still use `text/event-stream` framing for a single JSON-RPC response; buffer it.
    */
+  if (
+    options.sseAsPassthroughStream &&
+    contentType.includes("text/event-stream") &&
+    response.body
+  ) {
+    return {
+      statusCode,
+      headers,
+      body: Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+    };
+  }
+
   const text = await response.text();
   return {
     statusCode,

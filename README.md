@@ -21,10 +21,10 @@ Per-brand theming: edit `web-src/src/brand.json` (titles, accent colors, `toolRo
 
 ## MCP and ChatGPT
 
-- **Endpoint (after deploy)**: `POST https://<your-runtime-host>/v1/mcp` (same API sequence as other `v1` actions; exact host comes from your App Builder / Runtime URL).
+- **Endpoints (after deploy)**: `POST https://<your-runtime-host>/v1/mcp` for JSON-RPC requests, and **`GET https://<your-runtime-host>/v1/mcp`** for the Streamable HTTP **SSE** stream (same path; second API mapping in `app.config.yaml`, per Adobe’s action-apis pattern).
 - The **`mcp`** action uses **`raw-http: true`** so JSON-RPC stays in `__ow_body`, per Adobe’s pattern for Streamable HTTP MCP.
 - Tools exposed today: **`recommend`** (location → UI blocks), **`spotlight`** (topic → UI blocks). Extend `actions/mcp/create-server.ts` when you add actions.
-- The handler **materializes the full HTTP response** with `response.text()` before returning to OpenWhisk so the body is a normal string (reliable with `resultAsHttp`). Very large streamed MCP payloads are not optimized in this boilerplate—split tools or paginate if you outgrow it.
+- **POST / DELETE** responses are buffered with `response.text()` (including SSE-framed JSON-RPC) so OpenWhisk gets a string body. **`GET` SSE** is returned as a Node **`Readable`** stream (not fully buffered) so long-lived MCP streams do not block the action.
 
 ### If you cannot use MCP
 
