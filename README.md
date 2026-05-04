@@ -44,5 +44,6 @@ Deploy with `npm run app:deploy` once your AIO workspace is linked.
 
 ## Notes
 
+- **AI coding agents:** project architecture and contracts are in **`AGENTS.md`**; **`CLAUDE.md`** points there for tools that expect that filename.
 - Streaming uses **Server-Sent Events** (`text/event-stream`) from the `chat` action; the SPA parses `data:` JSON lines and maps `event.type` to UI and navigation.
 - Replace demo UI in `actions/shared/demo-payloads.ts` (and wire real services from `recommend` / `spotlight` / MCP tool handlers).
