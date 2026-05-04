@@ -21,10 +21,11 @@ Per-brand theming: edit `web-src/src/brand.json` (titles, accent colors, `toolRo
 
 ## MCP and ChatGPT
 
-- **Endpoints (after deploy)**: **`POST https://<your-runtime-host>/v1/mcp`** carries JSON-RPC over Streamable HTTP with **`enableJsonResponse: true`** and a **fresh transport per request** (same serverless choices as [Adobe’s `generator-app-remote-mcp-server-generic`](https://github.com/adobe/generator-app-remote-mcp-server-generic)). This repo uses the SDK’s **`WebStandardStreamableHTTPServerTransport`** for POST because **`StreamableHTTPServerTransport`** in current `@modelcontextprotocol/sdk` builds on `@hono/node-server` and expects a full Node `IncomingMessage`; the generator’s minimal req/res shim does not receive responses correctly on SDK 1.29+.
-- **`GET /v1/mcp`** (second API mapping in `app.config.yaml`, same path as POST) returns a **health JSON** payload; if the client sends **`Accept: text/event-stream`**, the action returns a short **SSE error** explaining that SSE is not supported server-side—again matching the official generator’s serverless pattern.
-- The **`mcp`** action uses **`raw-http: true`**, **`limits`** (timeout / memory), and optional **`LOG_LEVEL`** like the generator’s `app.config.yaml`.
-- Tools exposed today: **`recommend`** (location → UI blocks), **`spotlight`** (topic → UI blocks). Extend `actions/mcp/create-server.ts` when you add actions.
+The **`mcp`** action is the **JavaScript implementation from [Adobe’s `generator-app-remote-mcp-server-generic`](https://github.com/adobe/generator-app-remote-mcp-server-generic)** (`index.js` + `tools.js` pattern), pinned to **`@modelcontextprotocol/sdk@1.17.4`** and **`@adobe/aio-sdk`** like that template so the **StreamableHTTPServerTransport + OpenWhisk req/res shim** matches what Adobe ships and tests.
+
+- **`POST /v1/mcp`**: JSON-RPC over Streamable HTTP with **`enableJsonResponse: true`**, fresh server/transport per request (generator behavior).
+- **`GET /v1/mcp`**: health JSON, or a short **SSE error** when `Accept: text/event-stream` (generator’s serverless stance). **Token/tool streaming for the LLM** stays in the **`chat`** action (SSE), not MCP GET.
+- **Boilerplate extensions**: `actions/mcp/llm-boilerplate-tools.js` registers **`recommend`** and **`spotlight`** (same structured UI contract as the REST actions). Generator demo tools remain in `actions/mcp/tools.js`; edit or replace them as needed.
 
 ### If you cannot use MCP
 

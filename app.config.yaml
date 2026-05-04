@@ -35,7 +35,7 @@ application:
               final: true
               web-export: true
           mcp:
-            function: actions/mcp/index.ts
+            function: actions/mcp/index.js
             web: 'yes'
             runtime: nodejs:22
             limits:

@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js test/mcp.test.cjs",
     "app:dev": "aio app dev",
     "app:build": "aio app build",
     "app:deploy": "aio app deploy"
@@ -24,7 +24,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@adobe/aio-sdk": "^5.0.0",
+    "@modelcontextprotocol/sdk": "1.17.4",
     "openai": "^5.23.2",
     "zod": "^3.25.76"
   }
