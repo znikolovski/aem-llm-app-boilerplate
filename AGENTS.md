@@ -76,8 +76,22 @@ web-src/src/
 
 app.config.yaml          Runtime manifest (actions, APIs, env inputs)
 package.json             Workspace root + aio scripts
+tsconfig.json            `noEmit: true` — `npm run build` / `tsc --noEmit` only (no `.js` in actions/)
+tsconfig.test.json       emits compiled tests under `.cache/test` for `npm test`
+tsconfig.webpack.json    `noEmit: false` + `sourceMap` — ts-loader for `aio app build` only
+webpack-config.cjs       Webpack merge for App Builder; ts-loader `configFile` → tsconfig.webpack.json
 test/                    node:test suites for action handlers
 ```
+
+### TypeScript: CLI typecheck vs App Builder emit
+
+The root **`tsconfig.json`** intentionally sets **`noEmit: true`** so **`npm run build`** runs **`tsc --noEmit`** and never writes compiled `.js` next to your `.ts` sources under **`actions/`**.
+
+**`aio app build`** uses **webpack** + **ts-loader** with the merged **`webpack-config.cjs`**. If ts-loader used that same `tsconfig.json`, the compiler would emit no JS and ts-loader would error with *“TypeScript emitted no output for …”*. Trying to fix that with **`compilerOptions: { noEmit: false }`** only in the loader is fragile (AIO/webpack merges vary).
+
+**Fix:** **`tsconfig.webpack.json`** extends the root file and overrides **`noEmit`** to **`false`** and sets **`sourceMap: true`** (matching **`devtool: "inline-source-map"`**). **`webpack-config.cjs`** passes **`configFile: path.resolve(__dirname, "tsconfig.webpack.json")`** to ts-loader. Keep **`npm run build`** unchanged against the root **`tsconfig.json`**.
+
+When adding new **`compilerOptions`** for actions, put shared rules in **`tsconfig.json`** so both CLI and webpack inherit them; override emit-related flags only in **`tsconfig.webpack.json`** if needed.
 
 ## End-to-end request flow
 
@@ -310,7 +324,7 @@ Two layers, in increasing intrusiveness:
 ```bash
 npm install
 npm test                # tsc-then-node:test for actions
-npm run build           # tsc --noEmit (type check)
+npm run build           # tsc --noEmit (root tsconfig.json — no emit to actions/)
 npm run app:dev         # aio app dev — local Runtime + SPA
 npm run app:deploy      # aio app deploy — pushes to your AIO workspace
 ```

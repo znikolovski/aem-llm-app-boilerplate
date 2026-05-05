@@ -42,6 +42,12 @@ npm run app:dev
 
 Deploy with `npm run app:deploy` once your AIO workspace is linked.
 
+## TypeScript: root config vs webpack
+
+- **`tsconfig.json`** sets **`"noEmit": true`** so **`npm run build`** can run **`tsc --noEmit`** without writing `.js` files into **`actions/`**.
+- **`aio app build`** bundles actions with **webpack** + **ts-loader**. With the root config, TypeScript emits nothing and ts-loader fails with *“TypeScript emitted no output for …/index.ts”*. Overriding **`noEmit`** only inside the loader is unreliable depending on how AIO merges webpack.
+- **`tsconfig.webpack.json`** extends the root config and sets **`noEmit: false`** and **`sourceMap: true`** (aligned with **`devtool: "inline-source-map"`** in **`webpack-config.cjs`**). ts-loader is pointed at that file via **`configFile`**.
+
 ## Notes
 
 - **AI coding agents:** project architecture and contracts are in **`AGENTS.md`**; **`CLAUDE.md`** points there for tools that expect that filename.
