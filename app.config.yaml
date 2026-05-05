@@ -43,6 +43,10 @@ application:
               memory: 512
             inputs:
               LOG_LEVEL: debug
+              LLM_APP_BASE_URL: $LLM_APP_BASE_URL
+              LLM_EXPERIENCE_ORIGIN: $LLM_EXPERIENCE_ORIGIN
+              LLM_APP_OW_PACKAGE: $LLM_APP_OW_PACKAGE
+              LLM_CHATGPT_FRAME_DOMAINS: $LLM_CHATGPT_FRAME_DOMAINS
             annotations:
               require-adobe-auth: false
               final: true

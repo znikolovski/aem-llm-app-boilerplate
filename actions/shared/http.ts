@@ -91,33 +91,67 @@ export function errorResponse(error: unknown, statusCode = 500): RuntimeResponse
   return jsonResponse({ error: message }, statusCode);
 }
 
+/**
+ * `aio app dev` merges JSON POST fields onto the root `params` object for non-raw web actions
+ * and does not set `__ow_body`. Deployed runtimes typically pass the payload via `__ow_body` or `body`.
+ */
+function mergeJsonFieldsFromParams(params: RuntimeParams, base: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> =
+    base && typeof base === "object" && !Array.isArray(base) ? { ...(base as Record<string, unknown>) } : {};
+
+  for (const [key, value] of Object.entries(params)) {
+    if (key === "body" || key.startsWith("__ow_")) {
+      continue;
+    }
+    if (/^[A-Z][A-Z0-9_]*$/.test(key)) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 export function parseJsonBody(params: RuntimeParams): unknown {
   const body = params.__ow_body ?? params.body;
 
+  let parsed: unknown;
+
   if (body == null || body === "") {
-    return {};
-  }
+    parsed = {};
+  } else if (typeof body === "object") {
+    parsed = body;
+  } else {
+    const raw = String(body);
+    const candidates = [raw, decodeBase64(raw)];
 
-  if (typeof body === "object") {
-    return body;
-  }
-
-  const raw = String(body);
-  const candidates = [raw, decodeBase64(raw)];
-
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
+    let decoded: unknown;
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue;
+      }
+      try {
+        decoded = JSON.parse(candidate);
+        break;
+      } catch {
+        // Try the next decoding form.
+      }
     }
-
-    try {
-      return JSON.parse(candidate);
-    } catch {
-      // Try the next decoding form.
+    if (decoded === undefined) {
+      throw new Error("Request body must be valid JSON.");
     }
+    parsed = decoded;
   }
 
-  throw new Error("Request body must be valid JSON.");
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    !Array.isArray(parsed) &&
+    Object.keys(parsed as Record<string, unknown>).length > 0
+  ) {
+    return parsed;
+  }
+
+  return mergeJsonFieldsFromParams(params, parsed);
 }
 
 export function readQueryString(params: RuntimeParams, key: string): string | undefined {

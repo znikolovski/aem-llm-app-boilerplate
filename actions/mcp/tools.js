@@ -24,6 +24,11 @@ governing permissions and limitations under the License.
  */
 
 const { z } = require('zod')
+const { resolveChatgptFrameDomains } = require('./llm-boilerplate-tools.js')
+const {
+    registerLlmAppExperienceWidgetResource,
+    patchToolsListForLlmAppWebapp
+} = require('./chatgpt-webapp-support.js')
 
 /**
  * Register all tools with the MCP server
@@ -198,6 +203,8 @@ function registerTools (server, params = {}) {
 
     const { registerLlmAppTools } = require('./llm-boilerplate-tools.js')
     registerLlmAppTools(server, params)
+    registerLlmAppExperienceWidgetResource(server, params, resolveChatgptFrameDomains)
+    patchToolsListForLlmAppWebapp(server)
 }
 
 /**

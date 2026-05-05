@@ -28,6 +28,25 @@ function parseFunctionCallArgs(item) {
   }
 }
 
+/** Final assistant plain text from a completed Responses `response` object. */
+function assistantTextFromResponse(response) {
+  const out = response?.output;
+  if (!Array.isArray(out)) {
+    return "";
+  }
+  const parts = [];
+  for (const item of out) {
+    if (item?.type === "message" && Array.isArray(item.content)) {
+      for (const c of item.content) {
+        if (c?.type === "output_text" && typeof c.text === "string") {
+          parts.push(c.text);
+        }
+      }
+    }
+  }
+  return parts.join("\n\n").trim();
+}
+
 export function Chat() {
   const { beginSession, setSessionParams } = useExperienceSessions();
   const [turns, setTurns] = useState([]);
@@ -46,9 +65,38 @@ export function Chat() {
       }
 
       if (event.type === "response.output_text.delta") {
-        const piece = typeof event.delta === "string" ? event.delta : "";
+        const piece =
+          typeof event.delta === "string"
+            ? event.delta
+            : typeof event.text === "string"
+              ? event.text
+              : "";
         streamBuf.current += piece;
         setStreamingText(streamBuf.current);
+        return;
+      }
+
+      if (event.type === "response.output_text.done" && typeof event.text === "string") {
+        streamBuf.current = event.text;
+        setStreamingText(streamBuf.current);
+        return;
+      }
+
+      if (event.type === "response.reasoning_text.delta") {
+        const piece = typeof event.delta === "string" ? event.delta : "";
+        if (piece) {
+          streamBuf.current += piece;
+          setStreamingText(streamBuf.current);
+        }
+        return;
+      }
+
+      if (event.type === "response.reasoning_summary_text.delta") {
+        const piece = typeof event.delta === "string" ? event.delta : "";
+        if (piece) {
+          streamBuf.current += piece;
+          setStreamingText(streamBuf.current);
+        }
         return;
       }
 
@@ -82,20 +130,42 @@ export function Chat() {
 
       if (event.type === "response.completed") {
         const output = event.response?.output;
-        if (!Array.isArray(output)) {
-          return;
-        }
-        for (const item of output) {
-          if (item?.type !== "function_call" || !toolRouteByName(brand.toolRoutes, item.name)) {
-            continue;
+        if (Array.isArray(output)) {
+          for (const item of output) {
+            if (item?.type !== "function_call" || !toolRouteByName(brand.toolRoutes, item.name)) {
+              continue;
+            }
+            const id = item.call_id && String(item.call_id).trim() ? String(item.call_id).trim() : null;
+            if (!id) {
+              continue;
+            }
+            const params = parseFunctionCallArgs(item);
+            setSessionParams(id, item.name, params);
           }
-          const id = item.call_id && String(item.call_id).trim() ? String(item.call_id).trim() : null;
-          if (!id) {
-            continue;
-          }
-          const params = parseFunctionCallArgs(item);
-          setSessionParams(id, item.name, params);
         }
+        const fromProp =
+          typeof event.response?.output_text === "string" ? event.response.output_text.trim() : "";
+        const fromOutput = assistantTextFromResponse(event.response);
+        const finalText = fromProp || fromOutput;
+        if (finalText && !String(streamBuf.current || "").trim()) {
+          streamBuf.current = finalText;
+          setStreamingText(finalText);
+        }
+        const respErr = event.response?.error;
+        if (respErr && typeof respErr.message === "string" && respErr.message.trim()) {
+          setError(respErr.message.trim());
+        }
+        return;
+      }
+
+      if (event.type === "error") {
+        setError(typeof event.message === "string" && event.message.trim() ? event.message : "Response error.");
+        return;
+      }
+
+      if (event.type === "response.failed") {
+        const msg = event.response?.error?.message || "Response failed.";
+        setError(String(msg).trim());
         return;
       }
 

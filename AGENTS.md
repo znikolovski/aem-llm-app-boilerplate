@@ -1,7 +1,8 @@
 # Agent instructions — `aem-llm-app-boilerplate`
 
 > **Naming:** `AGENTS.md` is the canonical repo-root file for coding-agent context.  
-> **`CLAUDE.md`** exists as a thin pointer for Claude Code and other tools that look for that filename by default.
+> **`CLAUDE.md`** exists as a thin pointer for Claude Code and other tools that look for that filename by default.  
+> Older forks (e.g. [SecurBank LLM app](https://github.com/znikolovski/securbank-llm-app)) may still ship `AGENT_GUIDE.md`; treat **`AGENTS.md` here** as the merged, up-to-date guide.
 >
 > This file is read by AI coding agents (e.g. Studio's chat
 > orchestrator) **after they scaffold a new app from this repo**. It
@@ -29,7 +30,9 @@ A self-contained **Adobe App Builder** project that ships:
    - Fetches blocks from the matching tool action in parallel,
    - Renders blocks via `renderers/uiRenderer.jsx`,
    - Mirrors the same sessions on bookmarkable per-tool routes
-     driven by `brand.toolRoutes`.
+     driven by `brand.toolRoutes`,
+   - Supports **deep links** (`/recommendation?location=…`, `/spotlight?topic=…`) and an optional **ChatGPT Apps** bridge (`lib/mcpAppsBridge.js`) for `callTool` from embedded iframes.
+4. An **MCP** web action (`actions/mcp/`) exposing `recommend` / `spotlight` as MCP tools that **POST** to the same REST actions as the SPA, returning Markdown plus `structuredContent` (UI blocks, URLs, optional `next_actions` for follow-up `spotlight` calls).
 
 The whole thing is themable from `web-src/src/brand.json` plus the
 CSS variables in `web-src/src/styles.css`. The boilerplate is meant
@@ -43,6 +46,14 @@ actions/                 OpenWhisk web action handlers (TypeScript)
 ├── chat/index.ts        SSE streaming chat — wraps openai.responses.stream()
 ├── recommend/index.ts   Example tool action — returns { ui: UIBlock[] }
 ├── spotlight/index.ts   Second example tool action — same shape
+├── mcp/                 Streamable HTTP MCP server + ChatGPT widget metadata
+│   ├── index.js         MCP transport + capability registration
+│   ├── tools.js         registerTools / resources / prompts + tools/list patch
+│   ├── llm-boilerplate-tools.js   MCP tools recommend + spotlight (HTTP to sibling actions)
+│   ├── resolve-web-base.js        LLM_APP_BASE_URL, experience origin, client base, deep links
+│   ├── experience-routes.json     tool name → SPA path segment (sync with brand.toolRoutes.path)
+│   ├── markdown-ui.js             Markdown for tool content; next_actions for spotlight
+│   └── chatgpt-webapp-support.js  Widget HTML + OpenAI `_meta` for Apps SDK hosts
 └── shared/
     ├── action.ts        runAction(): wraps OPTIONS, errors, response normalize
     ├── http.ts          jsonResponse / textResponse / sseStreamResponse / parseJsonBody
@@ -53,30 +64,33 @@ actions/                 OpenWhisk web action handlers (TypeScript)
     └── types.ts         RuntimeParams / RuntimeResponse
 
 web-src/src/
-├── app.jsx              <App>: applies brand.theme.accent[+Dark] CSS vars
+├── app.jsx              Router + theme CSS vars; warmupMcpAppsBridge()
 ├── index.jsx            createRoot(<App />)
 ├── router.jsx           "/" → AppShell; ":toolPath" → ToolRoutePage
 ├── brand.json           Per-brand identity + tool route map (see below)
-├── styles.css           CSS variables (--bg --fg --accent …) + light/dark
-├── layout/AppShell.jsx  Header + split chat|experience + ToolParallelStack
+├── styles.css           CSS variables + `ub-*` structured card layouts
+├── layout/AppShell.jsx  Header + split chat|experience; embed mode on tool routes
 ├── pages/
 │   ├── Chat.jsx         SSE consumer; opens sessions per function_call
 │   ├── ExperienceHome.jsx  Default right-pane content
 │   └── ToolRoutePage.jsx   Bookmarkable per-tool view (uses same sessions)
 ├── components/
-│   └── ToolParallelStack.jsx  Renders all active sessions; fetches blocks
+│   ├── ToolParallelStack.jsx   Renders sessions; fetches tool actions
+│   ├── DeepLinkSessionSync.jsx Query-driven sessions (location / topic)
+│   └── RecommendSpotlightCta.jsx  Recommend → spotlight (in-app + host callTool)
 ├── context/
 │   └── ExperienceSessionsContext.jsx  Reducer: skeleton → fetching → ready/error
 ├── lib/
-│   └── toolRouting.js   listToolRoutes / toolRouteByName / toolNameFromPath
+│   ├── toolRouting.js   listToolRoutes / toolRouteByName / toolNameFromPath
+│   └── mcpAppsBridge.js ChatGPT / MCP Apps postMessage + callTool helpers
 ├── renderers/
-│   └── uiRenderer.jsx   renderUI(blocks): text | card | table
+│   └── uiRenderer.jsx   renderUI(blocks): text | card | table (+ variants)
 └── services/
-    └── api.js           apiUrl(); chatStream(); recommend(); spotlight()
+    └── api.js           apiBaseUrl / apiUrl; SSE; recommend; spotlight
 
 app.config.yaml          Runtime manifest (actions, APIs, env inputs)
 package.json             Workspace root + aio scripts
-test/                    node:test suites for action handlers
+test/                    node:test suites (actions + MCP)
 ```
 
 ## End-to-end request flow
@@ -128,18 +142,42 @@ session — that's the "stable identity per tool invocation" guarantee
 the reducer leans on.
 
 **Do not change the server-side wrapping** (`data: <json>\n\n`) — the
-SPA's `readSseStream()` (in `services/api.js`) parses by `\n\n` chunk
-boundary and `data:` prefix.
+SPA's `readSseStream()` (in `services/api.js`) joins **multi-line `data:`**
+records per the SSE spec and normalizes `\r\n`, so proxies that chunk
+differently still work.
+
+## MCP server, deep links, and ChatGPT Apps
+
+- **`actions/mcp/llm-boilerplate-tools.js`** registers MCP tools **`recommend`** (`location`) and **`spotlight`** (`topic`) that mirror the REST handlers. Resolution of public bases and safe client-facing URLs lives in **`resolve-web-base.js`**; **`experience-routes.json`** maps each tool name to the SPA segment (must stay aligned with **`brand.toolRoutes[*].path`**).
+- **`buildExperienceViewUrl`** (same module family) builds deep links into the SPA. **Default:** path URLs (`https://host/recommendation?location=…`) for **`BrowserRouter`**. If the static host cannot serve `index.html` for arbitrary paths, set **`LLM_EXPERIENCE_USE_HASH_ROUTES=1`** (env or OpenWhisk `params`) to emit `https://host/#/recommendation?…` and switch the SPA to **`HashRouter`**.
+- **`app.config.yaml`** passes through optional **`LLM_APP_BASE_URL`**, **`LLM_EXPERIENCE_ORIGIN`**, **`LLM_APP_OW_PACKAGE`**, **`LLM_CHATGPT_FRAME_DOMAINS`** for the MCP action — see the env table below.
+- **`web-src/src/components/DeepLinkSessionSync.jsx`** opens sessions from the query string: **`location`** (recommend) and **`topic`** (spotlight). Legacy aliases **`productType`** / **`product`** still work for older bookmarks.
+- **`mcpAppsBridge.js`** + **`RecommendSpotlightCta`**: in an embedded ChatGPT-style iframe, the CTA tries **`window.openai.callTool('spotlight', { topic })`** (or MCP **`tools/call`**) and always **`navigate`**s to the in-app spotlight route so **`POST /spotlight`** runs via **`ToolParallelStack`** even if the host bridge is a no-op.
 
 ## The UI-block contract (shared)
 
-`actions/shared/ui-blocks.ts` defines exactly three block kinds today:
+`actions/shared/ui-blocks.ts` defines the block kinds the SPA renderer understands (extend the union and **`uiRenderer.jsx`** together):
 
 ```ts
 type UIBlock =
-  | { type: "text";  content: string;                       skeleton?: boolean }
-  | { type: "card";  title: string; body: string;           skeleton?: boolean }
-  | { type: "table"; columns: string[]; rows: string[][];   skeleton?: boolean };
+  | { type: "text"; content: string; skeleton?: boolean; role?: "sectionHeading" }
+  | {
+      type: "card";
+      title: string;
+      body: string;
+      skeleton?: boolean;
+      variant?: "spotlightHero" | "recommendHero" | "recommendTile";
+      badge?: string;
+      ctaLabel?: string;
+      learnMoreLabel?: string;
+      spotlightTopic?: string;   // handoff to spotlight tool + query ?topic=
+      spotlightProduct?: string; // deprecated alias
+      href?: string;
+      kicker?: string;
+      imageUrl?: string;
+      imageAlt?: string;
+    }
+  | { type: "table"; columns: string[]; rows: string[][]; skeleton?: boolean };
 
 interface RecommendToolResponse { ui: UIBlock[]; }
 ```
@@ -167,8 +205,10 @@ deployments):
   "kicker":      "Adobe App Builder",          // small label above appTitle
   "appTitle":    "LLM App Boilerplate",        // <h1> in the header
   "appSubtitle": "…",                          // <p> under appTitle
-  "apiVersionPath": "/v1",                     // prefix for every action call
-  "toolRoutes": {                              // tool-name → { path, label }
+  "apiVersionPath": "/v1",                     // prefix for every action call when webActionsBase unset
+  "webActionsBase": "",                        // optional absolute or same-origin path to Runtime web actions root
+  "logoUrl": "",                               // optional header logo (omit or empty for text-only header)
+  "toolRoutes": {                              // tool-name → { path, label } — path must match experience-routes.json
     "recommend":  { "path": "recommendation", "label": "Stays & trips" },
     "spotlight":  { "path": "spotlight",       "label": "Campaign spotlight" }
   },
@@ -232,12 +272,17 @@ agent must touch **all** of these and nothing else:
    suits the brand). The route `/comparison` becomes available
    automatically; no router edits.
 
-7. **(optional)** `test/chat-recommend.test.ts` style coverage for
+7. **`actions/mcp/experience-routes.json`** — add `"compare": "comparison"` (same segment as `brand.toolRoutes.compare.path`) so MCP deep links and widget metadata stay aligned.
+
+8. **(optional)** `test/chat-recommend.test.ts` style coverage for
    the new action.
 
-If any of steps 1–6 is missed, the SPA either fails to open a
+9. **(optional, MCP)** Extend **`actions/mcp/llm-boilerplate-tools.js`** with a `compare` MCP tool (same JSON contract as the REST handler) if ChatGPT/MCP consumers need it.
+
+If any of steps 1–7 is missed, the SPA either fails to open a
 session (step 6 mismatched), opens a session that never resolves
-(step 4/5 missing), or shows an error toast (step 1/2 broken).
+(step 4/5 missing), shows an error toast (step 1/2 broken), or MCP
+deep links point at the wrong route (step 7).
 
 ## Theming — Figma / brand customisation
 
@@ -287,6 +332,7 @@ Two layers, in increasing intrusiveness:
   `process.env` directly. The helpers fall back to `params[key]`
   first, which is how `app.config.yaml`'s `inputs:` map plumbs env
   vars into the action.
+- **`parseJsonBody`** (`shared/http.ts`): under **`aio app dev`**, JSON fields are often **flattened onto `params`** (no `__ow_body`). The helper merges those fields (skipping `__ow_*`, `body`, and ALL_CAPS keys) when the body is empty — same pattern as hardened production apps.
 - Never set hop-by-hop headers (`connection`,
   `transfer-encoding`, …). `normalizeOpenWhiskWebResponse` drops
   them, but it's better not to set them.
@@ -296,7 +342,11 @@ Two layers, in increasing intrusiveness:
 - The `Chat` component owns the SSE consumption; the
   `ToolParallelStack` owns tool-action HTTP. Don't move SSE parsing
   out of `Chat.jsx` — it relies on local refs (`streamBuf`,
-  `idByOutputIndex`) for stable session ids.
+  `idByOutputIndex`) for stable session ids. `Chat.jsx` also handles
+  extra Responses event shapes (`response.output_text.done`, reasoning
+  deltas, `response.failed`, top-level `error`) for newer API streams.
+- **`services/api.js`**: normalizes **`webActionsBase`** / **`window.__LLM_API_BASE__`** (cross-origin only), strips duplicated host segments some gateways inject, and parses SSE robustly. Prefer this module for all action HTTP.
+- On **`/recommendation`** and **`/spotlight`** routes, **`AppShell`** uses a **tool-route embed** layout (chat hidden, minimal chrome) suitable for MCP-driven full-width experiences.
 - Sessions are keyed on the function-call's `call_id`. Re-using the
   same `id` twice is a no-op (`reducer` checks `state.sessions.some`).
 - `renderUI` is the only place that translates `UIBlock` → DOM.
@@ -323,6 +373,11 @@ deployed envs):
 | `OPENAI_API_KEY` | yes | — | The Responses API call in `actions/chat`. |
 | `OPENAI_MODEL` | no | `gpt-4o` | Override the model id. |
 | `BRAND_DISPLAY_NAME` | no | `Your brand` | Injected into the chat system prompt + demo cards. |
+| `LLM_APP_BASE_URL` | no | — | Explicit Runtime web-actions base for MCP + deep links (wins over inferred `__ow_path`). |
+| `LLM_EXPERIENCE_ORIGIN` | no | — | Public browser origin for the SPA when the Runtime gateway host is internal-only. |
+| `LLM_APP_OW_PACKAGE` | no | — | Package segment when `__OW_ACTION_NAME` is a single segment (see `resolve-web-base.js`). |
+| `LLM_CHATGPT_FRAME_DOMAINS` | no | — | Extra allowed frame origins for ChatGPT widget metadata (comma-separated). |
+| `LLM_EXPERIENCE_USE_HASH_ROUTES` | no | — | Set to `1` / `true` to emit hash deep links from MCP; pair with `HashRouter` in `app.jsx`. |
 
 ## Things to NOT do
 

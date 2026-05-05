@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
 import brand from "./brand.json";
+import { warmupMcpAppsBridge } from "./lib/mcpAppsBridge.js";
 import { AppRoutes } from "./router.jsx";
 
 export function App() {
   useEffect(() => {
+    warmupMcpAppsBridge();
     const t = brand.theme || {};
     if (t.accent) {
       document.documentElement.style.setProperty("--accent", t.accent);
