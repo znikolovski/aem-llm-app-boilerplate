@@ -10,6 +10,11 @@
   "scripts": {
     "build": "tsc --noEmit",
     "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js test/mcp.test.cjs",
+    "sync:web-actions-base": "node scripts/sync-web-actions-base.mjs",
+    "clean:web-src-dist": "node scripts/clean-web-src-dist.mjs",
+    "postinstall": "npm run sync:web-actions-base",
+    "preapp:dev": "npm run clean:web-src-dist && npm run sync:web-actions-base",
+    "preapp:build": "npm run clean:web-src-dist && npm run sync:web-actions-base",
     "app:dev": "aio app dev",
     "app:build": "aio app build",
     "app:deploy": "aio app deploy"

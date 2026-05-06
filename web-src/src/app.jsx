@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, HashRouter } from "react-router-dom";
 import brand from "./brand.json";
+import { LLM_SPA_BASENAME } from "./llmSpaBasename.generated.js";
 import { AppRoutes } from "./router.jsx";
 
 export function App() {
@@ -23,9 +24,13 @@ export function App() {
     return () => mq.removeEventListener("change", apply);
   }, []);
 
+  const Router = brand.useHashRouter ? HashRouter : BrowserRouter;
+  // HashRouter: routes live in the fragment (`#/recommendation`). Package prefix is only in the
+  // document URL (`…/<package>/index.html`), not Router basename. BrowserRouter uses basename for Model B.
+  const routerBasename = brand.useHashRouter ? undefined : LLM_SPA_BASENAME || undefined;
   return (
-    <BrowserRouter>
+    <Router basename={routerBasename}>
       <AppRoutes />
-    </BrowserRouter>
+    </Router>
   );
 }

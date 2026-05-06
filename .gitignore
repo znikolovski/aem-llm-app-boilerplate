@@ -5,6 +5,7 @@ node_modules/
 dist/
 .cache/
 .parcel-cache/
+web-src/dist/
 .DS_Store
 coverage/
 *.log
