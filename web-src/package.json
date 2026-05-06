@@ -9,5 +9,14 @@
   },
   "devDependencies": {
     "parcel": "^2.13.3"
+  },
+  "targets": {
+    "default": {
+      "publicUrl": "/llm-app/",
+      "distDir": "./dist/llm-app"
+    },
+    "webassets": {
+      "publicUrl": "/llm-app/"
+    }
   }
 }

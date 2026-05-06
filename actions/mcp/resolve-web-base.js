@@ -21,6 +21,36 @@ function normalizeOpenWhiskApiOrigin (raw) {
 }
 
 /**
+ * App Builder workspace hosts look like `28538-llmappstudio.adobeioruntime.net` while some gateways
+ * expose paths as `/api/v1/web/<workspace-id>/<package-id>/…`. Browsers must POST to the public
+ * shape `/api/v1/web/<package-id>/…` (one segment after `web`). When the first segment after `web`
+ * equals the **first hostname label**, drop that duplicate workspace segment.
+ */
+function collapseDuplicateWorkspaceSegmentAfterWeb (absoluteUrl) {
+  if (!absoluteUrl || typeof absoluteUrl !== 'string') return absoluteUrl
+  const wantTrailing = /\/$/.test(absoluteUrl.trim())
+  let s = absoluteUrl.trim().replace(/\/$/, '')
+  try {
+    const u = new URL(s.includes('://') ? s : `https://${s}`)
+    const hostFirst = String(u.hostname || '').split('.')[0].toLowerCase()
+    if (!hostFirst) return absoluteUrl
+    const parts = u.pathname.split('/').filter(Boolean)
+    if (parts.length < 5 || parts[0] !== 'api' || parts[1] !== 'v1' || parts[2] !== 'web') {
+      return absoluteUrl
+    }
+    if (String(parts[3] || '').toLowerCase() !== hostFirst) {
+      return absoluteUrl
+    }
+    const tail = parts.slice(4)
+    u.pathname = `/${['api', 'v1', 'web', ...tail].join('/')}`
+    const out = u.toString().replace(/\/$/, '')
+    return wantTrailing ? `${out}/` : out
+  } catch {
+    return absoluteUrl
+  }
+}
+
+/**
  * From the incoming web activation: .../api/v1/web/<ns>/<pkg>/<action> → base through <pkg>/.
  * Works for aio app dev (localhost) and many deployed gateways that preserve this path shape.
  */
@@ -134,9 +164,34 @@ function readHeaderCi (headers, name) {
 }
 
 /**
- * Public browser-facing origin from this request’s Host / X-Forwarded-* (what ChatGPT / the gateway
- * used). Does not depend on __ow_path. Use when __OW_API_HOST is an internal Adobe facade host.
+ * App Builder serves the SPA from `*.adobeio-static.net` and Runtime web actions from
+ * `*.adobeioruntime.net`. Deep links must target the static host; otherwise `/` + hash on Runtime
+ * often redirects to unrelated Adobe pages. When resolution would yield a workspace
+ * `*.adobeioruntime.net` origin, map to the sibling `*.adobeio-static.net` origin (same subdomain
+ * prefix). Does not alter `resolveLlmPublicWebActionOrigin` / API bases — only SPA experience roots.
  */
+function mapWorkspaceAdobeRuntimeToStaticSpaOrigin (origin) {
+  if (!origin || typeof origin !== 'string') return origin
+  const trimmed = origin.trim().replace(/\/$/, '')
+  if (!trimmed) return origin
+  try {
+    const u = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    const host = u.hostname.toLowerCase()
+    if (host === 'adobeioruntime.net') {
+      u.hostname = 'adobeio-static.net'
+      return u.origin
+    }
+    if (host.endsWith('.adobeioruntime.net')) {
+      const prefix = host.slice(0, -'.adobeioruntime.net'.length)
+      u.hostname = `${prefix}.adobeio-static.net`
+      return u.origin
+    }
+  } catch {
+    return origin
+  }
+  return origin
+}
+
 function originFromForwardedRequestHeaders (params = {}) {
   const headers = params.__ow_headers || params.__OW_HEADERS || {}
   const hostCombined =
@@ -161,6 +216,26 @@ function originFromForwardedRequestHeaders (params = {}) {
 }
 
 /**
+ * `aio app dev` (`@adobe/aio-cli-plugin-app-dev`) serves the dev server with `https.createServer`
+ * and a self-signed certificate (default port **9080**). Plain `http://` to that port hits a TLS
+ * socket, so browsers show a generic connection error. Upgrade only `http://localhost|127.0.0.1:9080`.
+ */
+function upgradeLocalAioDevTlsOrigin (originStr) {
+  if (!originStr || typeof originStr !== 'string') return originStr
+  try {
+    const u = new URL(/^https?:\/\//i.test(originStr) ? originStr : `https://${originStr}`)
+    if (u.protocol !== 'http:') return originStr
+    const host = (u.hostname || '').toLowerCase()
+    const local = host === 'localhost' || host === '127.0.0.1'
+    if (!local || String(u.port || '') !== '9080') return originStr
+    u.protocol = 'https:'
+    return u.origin
+  } catch {
+    return originStr
+  }
+}
+
+/**
  * Public SPA root (scheme + host, no path). Must match the URL clients use to reach your app — not
  * the internal `__OW_API_HOST` runtime facade. Precedence:
  * 1) LLM_EXPERIENCE_ORIGIN (first comma-separated entry; normalized to origin when URL-shaped)
@@ -172,65 +247,81 @@ function originFromForwardedRequestHeaders (params = {}) {
  * 6) Origin of resolveLlmAppWebBase() only if not an internal Adobe gateway host — otherwise ''
  */
 function resolveLlmExperienceOrigin (params = {}) {
+  let out = ''
+
   const explicitRaw = pickParamOrEnv(params, 'LLM_EXPERIENCE_ORIGIN')
   if (explicitRaw) {
     const first = explicitRaw.split(',')[0].trim().replace(/\/$/, '')
     if (first) {
       try {
-        return new URL(first).origin
+        out = new URL(first).origin
       } catch {
-        return first
+        out = first
       }
     }
   }
 
-  const fromBaseUrl = pickParamOrEnv(params, 'LLM_APP_BASE_URL') || pickParamOrEnv(params, '__LLM_APP_BASE_URL')
-  if (fromBaseUrl) {
-    try {
-      const o = new URL(fromBaseUrl.replace(/\/$/, '')).origin
-      if (!isInternalAdobeIoruntimeFacadeHost(new URL(o).hostname)) {
-        return o
+  if (!out) {
+    const fromBaseUrl = pickParamOrEnv(params, 'LLM_APP_BASE_URL') || pickParamOrEnv(params, '__LLM_APP_BASE_URL')
+    if (fromBaseUrl) {
+      try {
+        const o = new URL(fromBaseUrl.replace(/\/$/, '')).origin
+        if (!isInternalAdobeIoruntimeFacadeHost(new URL(o).hostname)) {
+          out = o
+        }
+      } catch {
+        /* fall through */
       }
-    } catch {
-      /* fall through */
     }
   }
 
-  const fromForwarded = originFromForwardedRequestHeaders(params)
-  if (fromForwarded) {
-    try {
-      if (!isInternalAdobeIoruntimeFacadeHost(new URL(fromForwarded).hostname)) {
-        return fromForwarded
+  if (!out) {
+    const fromForwarded = originFromForwardedRequestHeaders(params)
+    if (fromForwarded) {
+      try {
+        if (!isInternalAdobeIoruntimeFacadeHost(new URL(fromForwarded).hostname)) {
+          out = fromForwarded
+        }
+      } catch {
+        /* fall through */
       }
-    } catch {
-      /* fall through */
     }
   }
 
-  const fromActivation = baseFromActivationRequest(params)
-  if (fromActivation) {
-    try {
-      const o = new URL(fromActivation)
-      if (!isInternalAdobeIoruntimeFacadeHost(o.hostname)) {
-        return o.origin
+  if (!out) {
+    const fromActivation = baseFromActivationRequest(params)
+    if (fromActivation) {
+      try {
+        const o = new URL(fromActivation)
+        if (!isInternalAdobeIoruntimeFacadeHost(o.hostname)) {
+          out = o.origin
+        }
+      } catch {
+        /* fall through */
       }
-    } catch {
-      /* fall through */
     }
   }
 
-  const pub = resolveLlmPublicWebActionOrigin(params)
-  if (pub) return pub
-
-  const apiBase = resolveLlmAppWebBase(params)
-  if (!apiBase) return ''
-  try {
-    const o = new URL(apiBase)
-    if (isInternalAdobeIoruntimeFacadeHost(o.hostname)) return ''
-    return o.origin
-  } catch {
-    return ''
+  if (!out) {
+    const pub = resolveLlmPublicWebActionOrigin(params)
+    if (pub) out = pub
   }
+
+  if (!out) {
+    const apiBase = resolveLlmAppWebBase(params)
+    if (apiBase) {
+      try {
+        const o = new URL(apiBase)
+        if (!isInternalAdobeIoruntimeFacadeHost(o.hostname)) {
+          out = o.origin
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+
+  return upgradeLocalAioDevTlsOrigin(mapWorkspaceAdobeRuntimeToStaticSpaOrigin(out))
 }
 
 /**
@@ -320,7 +411,7 @@ function resolveLlmPublicWebActionOrigin (params = {}) {
 function resolveLlmClientWebBase (params = {}) {
   const explicit = pickParamOrEnv(params, 'LLM_APP_BASE_URL') || pickParamOrEnv(params, '__LLM_APP_BASE_URL')
   if (explicit) {
-    return explicit.replace(/\/$/, '') + '/'
+    return collapseDuplicateWorkspaceSegmentAfterWeb(explicit.replace(/\/$/, '') + '/')
   }
 
   const raw = resolveLlmAppWebBase(params)
@@ -330,20 +421,59 @@ function resolveLlmClientWebBase (params = {}) {
   try {
     u = new URL(raw)
   } catch {
-    return raw.endsWith('/') ? raw : `${raw}/`
+    return collapseDuplicateWorkspaceSegmentAfterWeb(raw.endsWith('/') ? raw : `${raw}/`)
   }
 
   if (!isInternalAdobeIoruntimeFacadeHost(u.hostname)) {
-    return raw.replace(/\/$/, '') + '/'
+    return collapseDuplicateWorkspaceSegmentAfterWeb(raw.replace(/\/$/, '') + '/')
   }
 
   const publicOrigin = resolveLlmPublicWebActionOrigin(params)
   if (!publicOrigin) {
-    return raw.replace(/\/$/, '') + '/'
+    return collapseDuplicateWorkspaceSegmentAfterWeb(raw.replace(/\/$/, '') + '/')
   }
 
   const path = u.pathname.endsWith('/') ? u.pathname : `${u.pathname}/`
-  return `${publicOrigin.replace(/\/$/, '')}${path}`.replace(/\/$/, '') + '/'
+  const merged = `${publicOrigin.replace(/\/$/, '')}${path}`.replace(/\/$/, '') + '/'
+  return collapseDuplicateWorkspaceSegmentAfterWeb(merged)
+}
+
+/**
+ * Workspace SPA is served from `*.adobeio-static.net` while web actions use `*.adobeioruntime.net`.
+ * ChatGPT widget CSP lists allowed iframe origins explicitly; include both siblings whenever one
+ * appears so `experienceUrl` (often static) matches `frameDomains`.
+ */
+function addAdobeWorkspaceRuntimeStaticSiblingOrigins (originList) {
+  const out = new Set()
+  for (const raw of originList) {
+    if (!raw || typeof raw !== 'string') continue
+    const t = raw.trim()
+    if (!t) continue
+    try {
+      const u = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`)
+      if (isInternalAdobeIoruntimeFacadeHost(u.hostname)) continue
+      out.add(u.origin)
+      const h = String(u.hostname || '').toLowerCase()
+      if (h.endsWith('.adobeio-static.net')) {
+        const prefix = h.slice(0, -'.adobeio-static.net'.length)
+        if (prefix) {
+          const clone = new URL(u.toString())
+          clone.hostname = `${prefix}.adobeioruntime.net`
+          out.add(clone.origin)
+        }
+      } else if (h.endsWith('.adobeioruntime.net')) {
+        const prefix = h.slice(0, -'.adobeioruntime.net'.length)
+        if (prefix) {
+          const clone = new URL(u.toString())
+          clone.hostname = `${prefix}.adobeio-static.net`
+          out.add(clone.origin)
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return [...out]
 }
 
 /**
@@ -396,11 +526,86 @@ function resolveChatgptFrameDomains (params = {}) {
     }
   }
 
-  const list = [...origins]
+  let list = addAdobeWorkspaceRuntimeStaticSiblingOrigins([...origins])
   if (!list.length) {
-    list.push('http://localhost:9080', 'http://127.0.0.1:9080')
+    list.push(
+      'http://localhost:9080',
+      'https://localhost:9080',
+      'http://127.0.0.1:9080',
+      'https://127.0.0.1:9080',
+      'http://localhost:9090',
+      'https://localhost:9090',
+      'http://127.0.0.1:9090',
+      'https://127.0.0.1:9090'
+    )
   }
   return list
+}
+
+/**
+ * Last path segment after `/api/v1/web/…` from a Runtime web-actions base URL (the OpenWhisk package key).
+ */
+function extractWebActionPackageKeyFromBaseUrl (baseUrl) {
+  if (!baseUrl || typeof baseUrl !== 'string') return ''
+  try {
+    const normalized = /^https?:\/\//i.test(baseUrl) ? baseUrl : `https://x${baseUrl}`
+    const u = new URL(normalized.endsWith('/') ? normalized : `${normalized}/`)
+    const parts = u.pathname.replace(/\/$/, '').split('/').filter(Boolean)
+    const w = parts.indexOf('web')
+    if (w < 0 || w >= parts.length - 1) return ''
+    return parts[parts.length - 1] || ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * URL path prefix for the static SPA on the experience host (e.g. `/frescopa-d779c0088196`), aligned
+ * with the Runtime package key so multiple apps can share one `*.adobeio-static.net` origin.
+ * Override with `LLM_SPA_BASENAME` (leading slash, no trailing slash) when inference is wrong.
+ * Set **`LLM_STATIC_WEB_AT_ROOT=1`** only when **one** SPA intentionally lives at the **origin root**
+ * and MCP must omit the **`/<package>/`** prefix. **Leave unset** when multiple apps share one static host
+ * and require **`/<package>/`** isolation (separate `index.html` + bundles per Runtime package).
+ */
+function resolveLlmSpaBasename (params = {}) {
+  const rootFlag = pickParamOrEnv(params, 'LLM_STATIC_WEB_AT_ROOT')
+  if (rootFlag === '1' || /^true$/i.test(String(rootFlag || ''))) {
+    return ''
+  }
+  const explicit = pickParamOrEnv(params, 'LLM_SPA_BASENAME')
+  if (explicit) {
+    const t = explicit.trim().replace(/\/+$/, '')
+    if (!t) return ''
+    return t.startsWith('/') ? t : `/${t}`
+  }
+  const base = resolveLlmAppWebBase(params)
+  const key = extractWebActionPackageKeyFromBaseUrl(base)
+  if (!key) return ''
+  return `/${key}`
+}
+
+/**
+ * Under `aio app dev`, Express on the main port (default **9080**) serves `express.static(web.distDev)`.
+ * With namespaced **`distDir`** (`./dist/<package>`), `index.html` and chunks live under **`distDev/<package>/`**, so **`/<package>/index.html`** resolves when the static root is **`distDev`**. Parcel’s dev server (default **9090**) also resolves **`publicUrl`** paths such as **`https://localhost:9090/<package>/index.html`**. For **hash** links with a non-empty SPA basename, the document URL must target that Parcel origin locally or the path 404s on :9080 if Express is not serving the namespaced folder.
+ *
+ * Override the Parcel port with **`LLM_EXPERIENCE_DEV_PORT`** (params or env) when aio prints
+ * “Could not use bundler port 9090, using port …”.
+ */
+function resolveLocalAioParcelDevOrigin (originNoSlash, spaTrimmed, params = {}) {
+  if (!spaTrimmed || !originNoSlash) return ''
+  try {
+    const u = new URL(/^https?:\/\//i.test(originNoSlash) ? originNoSlash : `https://${originNoSlash}`)
+    const host = (u.hostname || '').toLowerCase()
+    if (host !== 'localhost' && host !== '127.0.0.1') return ''
+    if (String(u.port || '') !== '9080') return ''
+    const raw = pickParamOrEnv(params, 'LLM_EXPERIENCE_DEV_PORT')
+    const devPort =
+      raw && /^\d+$/.test(String(raw).trim()) ? String(raw).trim() : '9090'
+    u.port = devPort
+    return u.origin.replace(/\/$/, '')
+  } catch {
+    return ''
+  }
 }
 
 /**
@@ -409,6 +614,13 @@ function resolveChatgptFrameDomains (params = {}) {
  * - Optional: set `LLM_EXPERIENCE_USE_HASH_ROUTES=1` (params or env) for `/#/segment?…` when the host
  *   serves the SPA only from `index.html` without history fallback (some static hosts).
  * Paths must match experience-routes.json and `brand.json` `toolRoutes[*].path`.
+ * When the Runtime package is namespaced under `/api/v1/web/<pkg>/`, the same `<pkg>` is used as
+ * the SPA path prefix (`resolveLlmSpaBasename`) so deep links match `HashRouter` / `BrowserRouter` basename.
+ * **Hash routes:** the fragment is not sent to the server, so the URL must name a real HTML document.
+ * We always emit `…/index.html#/…` (with optional `/<package>/` before `index.html`) so hosts like
+ * Adobe `*.adobeio-static.net` serve the SPA shell instead of 404 on `/pkg#/` or bare `/#/`.
+ * **Local `aio app dev` + hash + package basename:** the HTML shell is served from Parcel’s dev port
+ * (see {@link resolveLocalAioParcelDevOrigin}) — not the Express :9080 static root alone.
  */
 function buildExperienceViewUrl (toolName, queryRecord, params = {}) {
   const originRaw = resolveLlmExperienceOrigin(params)
@@ -431,15 +643,25 @@ function buildExperienceViewUrl (toolName, queryRecord, params = {}) {
     }
   }
   const qs = sp.toString()
+  const spaBase = resolveLlmSpaBasename(params)
+  const originRoot = `${baseOrigin.replace(/\/$/, '')}${spaBase}`
   const useHash =
     pickParamOrEnv(params, 'LLM_EXPERIENCE_USE_HASH_ROUTES') === '1' ||
     /^true$/i.test(pickParamOrEnv(params, 'LLM_EXPERIENCE_USE_HASH_ROUTES'))
   if (useHash) {
     const hash = qs ? `#/${pathSeg}?${qs}` : `#/${pathSeg}`
-    return `${baseOrigin}/${hash}`
+    const originNoSlash = baseOrigin.replace(/\/$/, '')
+    const spaTrimmed =
+      spaBase && String(spaBase).trim() ? String(spaBase).replace(/\/$/, '') : ''
+    const parcelOrigin = resolveLocalAioParcelDevOrigin(originNoSlash, spaTrimmed, params)
+    const docOrigin = parcelOrigin || originNoSlash
+    const docBase = spaTrimmed
+      ? `${docOrigin}${spaTrimmed}/index.html`
+      : `${docOrigin}/index.html`
+    return `${docBase}${hash}`
   }
   const path = `/${String(pathSeg).replace(/^\/+/, '')}`
-  return qs ? `${baseOrigin}${path}?${qs}` : `${baseOrigin}${path}`
+  return qs ? `${originRoot}${path}?${qs}` : `${originRoot}${path}`
 }
 
 /**
@@ -489,11 +711,16 @@ module.exports = {
   resolveLlmAppWebBase,
   readHeaderCi,
   originFromForwardedRequestHeaders,
+  mapWorkspaceAdobeRuntimeToStaticSpaOrigin,
+  upgradeLocalAioDevTlsOrigin,
   resolveLlmExperienceOrigin,
   isInternalAdobeIoruntimeFacadeHost,
   resolveLlmPublicWebActionOrigin,
   resolveLlmClientWebBase,
+  collapseDuplicateWorkspaceSegmentAfterWeb,
   resolveChatgptFrameDomains,
   buildExperienceViewUrl,
+  resolveLlmSpaBasename,
+  resolveLocalAioParcelDevOrigin,
   callJsonEndpoint
 }

@@ -5,6 +5,7 @@
 
 'use strict'
 
+const resolveWebBase = require('./resolve-web-base.js')
 const { zodToJsonSchema } = require('zod-to-json-schema')
 const { ListToolsRequestSchema } = require('@modelcontextprotocol/sdk/types.js')
 
@@ -166,8 +167,29 @@ function registerLlmAppExperienceWidgetResource (server, runtimeParams, resolveF
         domains = []
       }
       if (!Array.isArray(domains) || !domains.length) {
-        domains = ['http://localhost:9080', 'http://127.0.0.1:9080']
+        domains = [
+          'http://localhost:9080',
+          'https://localhost:9080',
+          'http://127.0.0.1:9080',
+          'https://127.0.0.1:9080',
+          'http://localhost:9090',
+          'https://localhost:9090',
+          'http://127.0.0.1:9090',
+          'https://127.0.0.1:9090'
+        ]
       }
+      let apiOrigins = []
+      try {
+        const client = resolveWebBase.resolveLlmClientWebBase(runtimeParams).trim().replace(/\/$/, '')
+        if (client) {
+          const u = new URL(/^https?:\/\//i.test(client) ? client : `https://${client}`)
+          apiOrigins.push(u.origin)
+        }
+      } catch {
+        apiOrigins = []
+      }
+      const connectDomains = [...new Set([...domains, ...apiOrigins].filter(Boolean))]
+      const resourceDomains = [...new Set([...domains, ...apiOrigins].filter(Boolean))]
       const html = buildExperienceEmbedWidgetHtml()
       return {
         contents: [
@@ -179,8 +201,8 @@ function registerLlmAppExperienceWidgetResource (server, runtimeParams, resolveF
               ui: {
                 prefersBorder: true,
                 csp: {
-                  connectDomains: [],
-                  resourceDomains: [],
+                  connectDomains,
+                  resourceDomains,
                   frameDomains: domains
                 }
               },

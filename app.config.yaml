@@ -1,6 +1,12 @@
 application:
   actions: actions
   web: web-src
+  # https://developer.adobe.com/app-builder/docs/guides/app_builder_guides/architecture_overview/app_hooks/
+  hooks:
+    pre-app-build: npm run sync:web-actions-base && npm run clean:web-src-dist
+    pre-app-deploy: npm run sync:web-actions-base && npm run clean:web-src-dist
+    post-app-build: ./scripts/aio-post-app-build-stage-web-under-package.cjs
+    deploy-static: ./scripts/aio-deploy-static-scoped.cjs
   runtimeManifest:
     packages:
       llm-app:
@@ -9,6 +15,8 @@ application:
           OPENAI_API_KEY: $OPENAI_API_KEY
           OPENAI_MODEL: $OPENAI_MODEL
           BRAND_DISPLAY_NAME: $BRAND_DISPLAY_NAME
+          # Optional: single-SPA-at-root — omit when several apps share *.adobeio-static.net (see AGENTS.md).
+          LLM_STATIC_WEB_AT_ROOT: $LLM_STATIC_WEB_AT_ROOT
         actions:
           chat:
             function: actions/chat/index.ts
@@ -47,6 +55,9 @@ application:
               LLM_EXPERIENCE_ORIGIN: $LLM_EXPERIENCE_ORIGIN
               LLM_APP_OW_PACKAGE: $LLM_APP_OW_PACKAGE
               LLM_CHATGPT_FRAME_DOMAINS: $LLM_CHATGPT_FRAME_DOMAINS
+              LLM_EXPERIENCE_USE_HASH_ROUTES: $LLM_EXPERIENCE_USE_HASH_ROUTES
+              LLM_SPA_BASENAME: $LLM_SPA_BASENAME
+              LLM_EXPERIENCE_DEV_PORT: $LLM_EXPERIENCE_DEV_PORT
             annotations:
               require-adobe-auth: false
               final: true

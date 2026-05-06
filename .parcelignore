@@ -1,0 +1,2 @@
+# Stale Parcel output must not become a second HTML entry (see scripts/clean-web-src-dist.mjs).
+web-src/dist/

@@ -180,5 +180,8 @@ module.exports = {
   resolveChatgptFrameDomains,
   formatLlmUiAsMarkdown,
   buildExperienceViewUrl,
-  recommendNextActionsFromUi
+  recommendNextActionsFromUi,
+  resolveLlmSpaBasename: resolveWeb.resolveLlmSpaBasename,
+  upgradeLocalAioDevTlsOrigin: resolveWeb.upgradeLocalAioDevTlsOrigin,
+  resolveLocalAioParcelDevOrigin: resolveWeb.resolveLocalAioParcelDevOrigin
 }

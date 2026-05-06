@@ -3,6 +3,8 @@
   "appTitle": "LLM App Boilerplate",
   "appSubtitle": "Split chat and experience: streaming decisions, parallel tool panels, and route-per-tool deep links.",
   "apiVersionPath": "/v1",
+  "webActionsBase": "",
+  "useHashRouter": false,
   "toolRoutes": {
     "recommend": { "path": "recommendation", "label": "Stays & trips" },
     "spotlight": { "path": "spotlight", "label": "Campaign spotlight" }

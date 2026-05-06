@@ -129,7 +129,7 @@ test('resolveLlmExperienceOrigin uses LLM_EXPERIENCE_ORIGIN when OpenWhisk host 
   assert.equal(resolveLlmExperienceOrigin({}), 'https://28538-llmappstudio.adobeio-static.net')
 })
 
-test('resolveLlmClientWebBase rewrites internal gateway to public origin from LLM_EXPERIENCE_ORIGIN', () => {
+test('resolveLlmClientWebBase rewrites internal gateway to public origin and collapses duplicate workspace segment', () => {
   saveEnv(KEYS)
   delete process.env.LLM_APP_BASE_URL
   process.env.__OW_ACTION_NAME = '/28538-llmappstudio/llm-app-f45e67040e2d/mcp'
@@ -141,7 +141,7 @@ test('resolveLlmClientWebBase rewrites internal gateway to public origin from LL
   const client = resolveLlmClientWebBase({})
   assert.equal(
     client,
-    'https://28538-llmappstudio.adobeioruntime.net/api/v1/web/28538-llmappstudio/llm-app-f45e67040e2d/'
+    'https://28538-llmappstudio.adobeioruntime.net/api/v1/web/llm-app-f45e67040e2d/'
   )
 })
 

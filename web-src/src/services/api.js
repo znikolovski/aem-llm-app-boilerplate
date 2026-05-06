@@ -1,4 +1,5 @@
 import brand from "../brand.json";
+import { LLM_WEB_ACTIONS_BASE_PATH } from "../llmWebActionsBase.generated.js";
 
 /**
  * Strips a duplicated **first path segment** when it repeats the SPA’s own host identity:
@@ -122,12 +123,55 @@ function normalizeApiBase(raw, win) {
 }
 
 /**
- * Prefix for Runtime **web actions** (same host as the SPA under `aio app dev` / deploy).
- * Optional absolute URL when the API is on another origin.
+ * When the SPA is served from Parcel (explicit port other than the actions port under `aio app dev`),
+ * `fetch("/api/v1/web/…")` would hit Parcel (**405**). Remap loopback only.
  *
- * Optional `window.__LLM_API_BASE__`: only honored when it targets a **different origin** than the
- * SPA. Same-origin values are ignored so broken injections cannot override `webActionsBase` with
- * path-shaped garbage.
+ * @param {Window | undefined} win
+ * @returns {string} e.g. `https://localhost:9080`, or `""` when no remap applies
+ */
+function localAioParcelUiToActionsOrigin(win) {
+  if (!win?.location) return "";
+  try {
+    const cur = new URL(win.location.href);
+    const h = cur.hostname.toLowerCase();
+    const loopback = h === "localhost" || h === "127.0.0.1" || h === "::1";
+    if (!loopback) return "";
+    const uiPort = cur.port || "";
+    if (uiPort === "") return "";
+    const actionsPortRaw =
+      win && typeof win.__LLM_DEV_ACTIONS_PORT__ === "string" && /^[1-9][0-9]{0,4}$/.test(win.__LLM_DEV_ACTIONS_PORT__.trim())
+        ? win.__LLM_DEV_ACTIONS_PORT__.trim()
+        : "9080";
+    if (uiPort === actionsPortRaw) return "";
+    const out = new URL(`${cur.protocol}//${cur.hostname}`);
+    out.port = actionsPortRaw;
+    return out.origin.replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * @param {string} href
+ * @param {Window} win
+ */
+function rewriteLoopbackWebActionsUrlToActionsServer(href, win) {
+  const ao = localAioParcelUiToActionsOrigin(win);
+  if (!ao) return href;
+  try {
+    const u = new URL(href, win.location.href);
+    if (u.origin !== win.location.origin) return href;
+    if (!/^\/api\/v1\/web\//i.test(u.pathname)) return href;
+    const fixed = new URL(`${u.pathname}${u.search}`, ao);
+    return fixed.toString().replace(/\/$/, "");
+  } catch {
+    return href;
+  }
+}
+
+/**
+ * Resolution order: `window.__LLM_API_BASE__`, `brand.webActionsBase`, generated `LLM_WEB_ACTIONS_BASE_PATH`.
+ * Under local `aio app dev` + Parcel, relative `/api/v1/web/…` is rewritten to the Express actions port.
  */
 export function apiBaseUrl() {
   const win = typeof window !== "undefined" ? window : undefined;
@@ -136,42 +180,57 @@ export function apiBaseUrl() {
     if (normalized) {
       try {
         const abs = new URL(normalized, win.location.href);
-        if (abs.origin !== win.location.origin) {
-          return normalized.replace(/\/$/, "");
+        const crossOrigin = abs.origin !== win.location.origin;
+        const p = abs.pathname.replace(/\/$/, "") || "/";
+        const sameOriginWebActions = !crossOrigin && /^\/api\/v1\/web\//i.test(p);
+        if (crossOrigin || sameOriginWebActions) {
+          const href = /^https?:\/\//i.test(normalized) ? normalized : abs.href;
+          return rewriteLoopbackWebActionsUrlToActionsServer(href.replace(/\/$/, ""), win).replace(/\/$/, "");
         }
       } catch {
-        /* invalid — fall through to webActionsBase */
+        /* fall through */
       }
     }
   }
-  const raw =
-    typeof brand.webActionsBase === "string" && brand.webActionsBase.trim() ? brand.webActionsBase.trim() : "";
+  const brandBase = typeof brand.webActionsBase === "string" && brand.webActionsBase.trim() ? brand.webActionsBase.trim() : "";
+  const generatedBase =
+    typeof LLM_WEB_ACTIONS_BASE_PATH === "string" && LLM_WEB_ACTIONS_BASE_PATH.trim()
+      ? LLM_WEB_ACTIONS_BASE_PATH.trim()
+      : "";
+  const raw = brandBase || generatedBase;
   if (!raw || !win) {
     return "";
   }
   const normalized = normalizeApiBase(raw, win);
   if (/^https?:\/\//i.test(normalized)) {
-    return normalized.replace(/\/$/, "");
+    return rewriteLoopbackWebActionsUrlToActionsServer(normalized.replace(/\/$/, ""), win).replace(/\/$/, "");
   }
   let path = normalized.startsWith("/") ? normalized : `/${normalized}`;
   path = stripAllDuplicateHostPathPrefixes(path, win);
-  return `${win.location.origin}${path}`.replace(/\/$/, "");
+  const actionsOrigin = localAioParcelUiToActionsOrigin(win);
+  const origin = (actionsOrigin || win.location.origin).replace(/\/$/, "");
+  const joined = `${origin}${path}`.replace(/\/$/, "");
+  return rewriteLoopbackWebActionsUrlToActionsServer(joined, win).replace(/\/$/, "");
 }
 
 export function apiUrl(segment) {
   const win = typeof window !== "undefined" ? window : undefined;
   const base = apiBaseUrl();
   if (base) {
-    const joined = `${base}/${segment}`.replace(/\/+/g, "/");
+    const seg = String(segment).replace(/^\/+/, "");
+    let joined;
+    try {
+      const baseWithSlash = base.replace(/\/?$/, "/");
+      joined = new URL(seg, baseWithSlash).href;
+    } catch {
+      joined = `${base}/${segment}`.replace(/([^:]\/)\/+/g, "$1");
+    }
     return win ? canonicalizeRequestUrl(joined, win) : joined;
   }
-  const path = `${brand.apiVersionPath}/${segment}`.replace(/\/+/g, "/");
+  const path = `${brand.apiVersionPath}/${segment}`.replace(/([^:]\/)\/+/g, "$1");
   return win ? canonicalizeRequestUrl(path, win) : path;
 }
 
-/**
- * POST /v1/chat — SSE stream of OpenAI Responses events (JSON `data:` lines).
- */
 export async function chatStream(message, { signal, onEvent } = {}) {
   const res = await fetch(apiUrl("chat"), {
     method: "POST",
@@ -239,17 +298,12 @@ export async function recommend(params, { signal } = {}) {
   return data;
 }
 
-/**
- * Parse SSE records (split on blank line). Normalizes CRLF so dev proxies / runtimes that emit
- * `\r\n` still delimit events correctly.
- */
 function splitSseRecords(buffer) {
   const normalized = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const parts = normalized.split("\n\n");
   return { records: parts.slice(0, -1), rest: parts[parts.length - 1] ?? "" };
 }
 
-/** One SSE event may contain multiple `data:` lines joined with `\n` (spec). */
 function dataPayloadFromRecord(record) {
   const lines = record.split("\n");
   const dataLines = [];

@@ -56,24 +56,26 @@ test('formatLlmUiAsMarkdown uses spotlight deep link when spotlightTopic set', (
   assert.ok(md.includes('topic'))
 })
 
-test('buildExperienceViewUrl joins origin and query (path routing for BrowserRouter)', () => {
+test('buildExperienceViewUrl joins origin and query (path routing for BrowserRouter + basename)', () => {
   const { buildExperienceViewUrl } = require('../actions/mcp/llm-boilerplate-tools.js')
   const url = buildExperienceViewUrl('recommend', { location: 'Fiji' }, {
-    LLM_EXPERIENCE_ORIGIN: 'https://app.example/'
+    LLM_EXPERIENCE_ORIGIN: 'https://app.example/',
+    LLM_APP_BASE_URL: 'https://app.example/api/v1/web/ns/llm-app/'
   })
-  assert.ok(url.startsWith('https://app.example/recommendation'))
+  assert.ok(url.startsWith('https://app.example/llm-app/recommendation'), url)
   assert.ok(url.includes('location'))
   assert.ok(url.includes('Fiji'))
-  assert.ok(!url.includes('#/'))
+  assert.ok(!url.includes('#'))
 })
 
-test('buildExperienceViewUrl uses hash when LLM_EXPERIENCE_USE_HASH_ROUTES=1', () => {
+test('buildExperienceViewUrl uses index.html + hash when LLM_EXPERIENCE_USE_HASH_ROUTES=1', () => {
   const { buildExperienceViewUrl } = require('../actions/mcp/llm-boilerplate-tools.js')
   const url = buildExperienceViewUrl('recommend', { location: 'x' }, {
     LLM_EXPERIENCE_ORIGIN: 'https://deploy.example.com/',
+    LLM_APP_BASE_URL: 'https://deploy.example.com/api/v1/web/ns/llm-app/',
     LLM_EXPERIENCE_USE_HASH_ROUTES: '1'
   })
-  assert.ok(url.includes('#/recommendation'))
+  assert.ok(url.includes('/llm-app/index.html#/recommendation'), url)
 })
 
 test('buildExperienceViewUrl uses same origin as LLM_APP_BASE_URL when experience unset', () => {
@@ -83,5 +85,5 @@ test('buildExperienceViewUrl uses same origin as LLM_APP_BASE_URL when experienc
   }
   assert.equal(resolveLlmExperienceOrigin(params), 'https://deploy.example.com')
   const url = buildExperienceViewUrl('recommend', { location: 'x' }, params)
-  assert.ok(url.startsWith('https://deploy.example.com/recommendation?'))
+  assert.ok(url.startsWith('https://deploy.example.com/pkg1/recommendation?'), url)
 })
