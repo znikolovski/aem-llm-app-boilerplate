@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js test/mcp.test.cjs test/mcp-llm-base-url.test.cjs test/mcp-ui-markdown.test.cjs test/mcp-experience-url.test.cjs",
+    "test": "tsc -p tsconfig.test.json && node --test .cache/test/test/**/*.test.js test/mcp.test.cjs test/mcp-llm-base-url.test.cjs test/mcp-ui-markdown.test.cjs test/mcp-ui-profile.test.cjs test/mcp-experience-url.test.cjs",
     "sync:web-actions-base": "node scripts/sync-web-actions-base.mjs",
     "clean:web-src-dist": "node scripts/clean-web-src-dist.mjs",
     "postinstall": "npm run sync:web-actions-base",

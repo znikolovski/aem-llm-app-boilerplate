@@ -17,6 +17,7 @@ const {
 } = resolveWeb
 const { formatLlmUiAsMarkdown, recommendNextActionsFromUi } = require('./markdown-ui.js')
 const { mergeOpenAiWebappResultMeta } = require('./chatgpt-webapp-support.js')
+const { resolveMcpUiProfile } = require('./mcp-ui-profile.js')
 
 /** @param {any} server - McpServer */
 function registerLlmAppTools (server, params = {}) {
@@ -24,6 +25,10 @@ function registerLlmAppTools (server, params = {}) {
     typeof params.BRAND_DISPLAY_NAME === 'string' && params.BRAND_DISPLAY_NAME.trim()
       ? params.BRAND_DISPLAY_NAME.trim()
       : 'llm-app'
+
+  const uiProfile = resolveMcpUiProfile(params)
+  const maybeOpenAiWeb = (experienceUrl, routeKey) =>
+    uiProfile === 'openai' ? mergeOpenAiWebappResultMeta(experienceUrl, routeKey) : {}
 
   server.tool(
     'recommend',
@@ -60,7 +65,8 @@ function registerLlmAppTools (server, params = {}) {
           subtitle: `Ideas for *${location}* (${brand}).`,
           experienceUrl,
           params,
-          recommendNextActions: nextActions
+          recommendNextActions: nextActions,
+          mcpUiProfile: uiProfile
         })
         const linkMeta = {
           tool: 'recommend',
@@ -70,7 +76,7 @@ function registerLlmAppTools (server, params = {}) {
           uiContract: 'UIBlock[]',
           spaToolPath: experienceRoutes.recommend
         }
-        const openAiWeb = mergeOpenAiWebappResultMeta(experienceUrl, experienceRoutes.recommend)
+        const openAiWeb = maybeOpenAiWeb(experienceUrl, experienceRoutes.recommend)
         const assistantOrchestration =
           nextActions.length > 0
             ? 'When the user wants full details on one card, call spotlight with topic exactly matching structuredContent.next_actions[].topic (or next_action.topic). Prefer a short chat acknowledgment when the user explicitly asks for details.'
@@ -140,7 +146,8 @@ function registerLlmAppTools (server, params = {}) {
           brand,
           subtitle: `Spotlight: *${topic}* (${brand}).`,
           experienceUrl,
-          params
+          params,
+          mcpUiProfile: uiProfile
         })
         const linkMeta = {
           tool: 'spotlight',
@@ -150,7 +157,7 @@ function registerLlmAppTools (server, params = {}) {
           uiContract: 'UIBlock[]',
           spaToolPath: experienceRoutes.spotlight
         }
-        const openAiWeb = mergeOpenAiWebappResultMeta(experienceUrl, experienceRoutes.spotlight)
+        const openAiWeb = maybeOpenAiWeb(experienceUrl, experienceRoutes.spotlight)
 
         return {
           content: [{ type: 'text', text: markdown }],

@@ -144,7 +144,7 @@ function createCompatibleResponse () {
     let headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-        'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, x-api-key, mcp-session-id, Last-Event-ID',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, x-api-key, mcp-session-id, Last-Event-ID, x-mcp-ui-profile, mcp-ui-profile, x-disable-openai-widget',
         'Access-Control-Expose-Headers': 'Content-Type, mcp-session-id, Last-Event-ID',
         'Access-Control-Max-Age': '86400'
     }
@@ -248,7 +248,7 @@ function handleHealthCheck () {
         headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-            'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, x-api-key, mcp-session-id, Last-Event-ID',
+            'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, x-api-key, mcp-session-id, Last-Event-ID, x-mcp-ui-profile, mcp-ui-profile, x-disable-openai-widget',
             'Access-Control-Expose-Headers': 'Content-Type, mcp-session-id, Last-Event-ID',
             'Access-Control-Max-Age': '86400',
             'Content-Type': 'application/json'
@@ -274,7 +274,7 @@ function handleOptionsRequest () {
         headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-            'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, x-api-key, mcp-session-id, Last-Event-ID',
+            'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, x-api-key, mcp-session-id, Last-Event-ID, x-mcp-ui-profile, mcp-ui-profile, x-disable-openai-widget',
             'Access-Control-Expose-Headers': 'Content-Type, mcp-session-id, Last-Event-ID',
             'Access-Control-Max-Age': '86400'
         },

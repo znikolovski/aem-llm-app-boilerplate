@@ -24,9 +24,10 @@ governing permissions and limitations under the License.
  */
 
 const { z } = require('zod')
+const { resolveMcpUiProfile } = require('./mcp-ui-profile.js')
 const { resolveChatgptFrameDomains } = require('./llm-boilerplate-tools.js')
 const {
-    registerLlmAppExperienceWidgetResource,
+    registerExperienceWidgetsForProfile,
     patchToolsListForLlmAppWebapp
 } = require('./chatgpt-webapp-support.js')
 
@@ -203,8 +204,9 @@ function registerTools (server, params = {}) {
 
     const { registerLlmAppTools } = require('./llm-boilerplate-tools.js')
     registerLlmAppTools(server, params)
-    registerLlmAppExperienceWidgetResource(server, params, resolveChatgptFrameDomains)
-    patchToolsListForLlmAppWebapp(server)
+    const uiProfile = resolveMcpUiProfile(params)
+    registerExperienceWidgetsForProfile(server, params, resolveChatgptFrameDomains, uiProfile)
+    patchToolsListForLlmAppWebapp(server, params, resolveChatgptFrameDomains)
 }
 
 /**

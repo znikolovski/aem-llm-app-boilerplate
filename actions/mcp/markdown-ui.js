@@ -30,7 +30,16 @@ function spotlightQueryValue (block) {
  */
 function formatLlmUiAsMarkdown (
   ui,
-  { brand, subtitle = '', experienceUrl = '', webAppHint = true, params = {}, recommendNextActions } = {}
+  {
+    brand,
+    subtitle = '',
+    experienceUrl = '',
+    webAppHint = true,
+    params = {},
+    recommendNextActions,
+    /** @type {'openai'|'mcp_apps'|'markdown'|undefined} */
+    mcpUiProfile
+  } = {}
 ) {
   const lines = []
   lines.push(`## ${brand}`)
@@ -90,20 +99,9 @@ function formatLlmUiAsMarkdown (
     out = `_No display content was returned for ${brand}._`
   }
 
-  if (experienceUrl) {
-    out +=
-      '\n\n---\n\n' +
-      `**Branded streaming UI:** [Open the ${brand} web app](${experienceUrl})\n\n` +
-      'Uses the same `{ ui }` blocks with full layout and theme from `web-src` (not the chat surface).'
-  } else if (webAppHint) {
-    out +=
-      '\n\n---\n\n' +
-      '> **Branded layout:** Use the App Builder **web-src** app (streaming chat + themed panels). ' +
-      'If there is no deep link above, the gateway origin could not be inferred—fix action URL resolution or set **LLM_EXPERIENCE_ORIGIN** when the SPA uses a different host.'
-  }
-
+  let followUpBlock = ''
   if (Array.isArray(recommendNextActions) && recommendNextActions.length > 0) {
-    const rows = recommendNextActions
+    const rowLines = recommendNextActions
       .map((a) => {
         const title =
           typeof a.card_title === 'string' && a.card_title.trim() ? a.card_title.trim() : a.topic
@@ -111,17 +109,62 @@ function formatLlmUiAsMarkdown (
         if (!topic) {
           return ''
         }
-        return `- **${title}** → call tool **spotlight** with \`topic\`: \`${topic.replace(/`/g, "'")}\``
+        const topicEsc = topic.replace(/`/g, "'")
+        if (mcpUiProfile === 'markdown') {
+          return `- **${title}** → call tool **spotlight** with JSON field \`topic\` set exactly to: \`${topicEsc}\` (do not paraphrase).`
+        }
+        return `- **${title}** → call tool **spotlight** with \`topic\`: \`${topicEsc}\``
       })
       .filter(Boolean)
-    if (rows.length) {
+    if (rowLines.length) {
+      if (mcpUiProfile === 'markdown') {
+        followUpBlock =
+          '\n\n---\n\n' +
+          '### Continue in chat (primary)\n\n' +
+          'Complete the flow here: when the user wants **full details** on a card, call **`spotlight`** with the matching `topic` below.\n\n' +
+          rowLines.join('\n')
+      } else {
+        followUpBlock =
+          '\n\n---\n\n' +
+          '### Follow-up (assistant)\n\n' +
+          'If the user asks for **full details** on one of these cards, or names a card, invoke the **`spotlight`** tool with the matching `topic` below. ' +
+          'You may **reply briefly in chat** when doing so so the user sees acknowledgment in the transcript ' +
+          '(the embedded app alone cannot author transcript lines).\n\n' +
+          rowLines.join('\n')
+      }
+    }
+  }
+
+  if (mcpUiProfile === 'markdown') {
+    if (followUpBlock) {
+      out += followUpBlock
+    }
+    if (experienceUrl) {
       out +=
         '\n\n---\n\n' +
-        '### Follow-up (assistant)\n\n' +
-        'If the user asks for **full details** on one of these cards, or names a card, invoke the **`spotlight`** tool with the matching `topic` below. ' +
-        'You may **reply briefly in chat** when doing so so the user sees acknowledgment in the transcript ' +
-        '(the embedded app alone cannot author transcript lines).\n\n' +
-        rows.join('\n')
+        '### Optional: full browser layout\n\n' +
+        `Same \`{ ui }\` blocks in the App Builder SPA: [open ${brand}](${experienceUrl}). ` +
+        'This link is **supplementary**—the assistant should still use **`spotlight`** in chat when the user wants details.'
+    } else if (webAppHint) {
+      out +=
+        '\n\n---\n\n' +
+        '> **Markdown / text-only hosts:** Prefer calling **`spotlight`** with `topic` from the cards or `structuredContent.next_actions` when the user wants details. ' +
+        'If no deep link was emitted, set **LLM_EXPERIENCE_ORIGIN** on the MCP action (or fix URL resolution) so optional “open in app” links work.'
+    }
+  } else {
+    if (experienceUrl) {
+      out +=
+        '\n\n---\n\n' +
+        `**Branded streaming UI:** [Open the ${brand} web app](${experienceUrl})\n\n` +
+        'Uses the same `{ ui }` blocks with full layout and theme from `web-src` (not the chat surface).'
+    } else if (webAppHint) {
+      out +=
+        '\n\n---\n\n' +
+        '> **Branded layout:** Use the App Builder **web-src** app (streaming chat + themed panels). ' +
+        'If there is no deep link above, the gateway origin could not be inferred—fix action URL resolution or set **LLM_EXPERIENCE_ORIGIN** when the SPA uses a different host.'
+    }
+    if (followUpBlock) {
+      out += followUpBlock
     }
   }
 

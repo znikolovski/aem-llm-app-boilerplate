@@ -53,7 +53,8 @@ actions/                 OpenWhisk web action handlers (TypeScript)
 │   ├── resolve-web-base.js        LLM_APP_BASE_URL, experience origin, client base, deep links
 │   ├── experience-routes.json     tool name → SPA path segment (sync with brand.toolRoutes.path)
 │   ├── markdown-ui.js             Markdown for tool content; next_actions for spotlight
-│   └── chatgpt-webapp-support.js  Widget HTML + OpenAI `_meta` for Apps SDK hosts
+│   ├── mcp-ui-profile.js          MCP_UI_PROFILE: openai | mcp_apps | markdown (+ legacy DISABLE_OPENAI_WIDGET)
+│   └── chatgpt-webapp-support.js  OpenAI widget, MCP Apps shell, tools/list patches
 └── shared/
     ├── action.ts        runAction(): wraps OPTIONS, errors, response normalize
     ├── http.ts          jsonResponse / textResponse / sseStreamResponse / parseJsonBody
@@ -150,13 +151,24 @@ SPA's `readSseStream()` (in `services/api.js`) joins **multi-line `data:`**
 records per the SSE spec and normalizes `\r\n`, so proxies that chunk
 differently still work.
 
+## Multi-host interaction requirement (MCP)
+
+Every MCP-exposed tool that drives structured UI **must** remain usable under **all three** delivery modes below. When you add or change a tool, update **OpenAI widget + `tools/list` metadata**, **MCP Apps resource + patches** (where applicable), and **markdown** in **`actions/mcp/markdown-ui.js`** together, and extend **`test/mcp-ui-profile.test.cjs`** (or equivalent) so profiles do not drift.
+
+1. **`openai`** (default) — ChatGPT / OpenAI Apps SDK: `ui://widget/llm-app-experience.html`, **`openai/toolInvocation`** on tool results where the host expects it (`actions/mcp/chatgpt-webapp-support.js`).
+2. **`mcp_apps`** — Hosts implementing [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps.md): `text/html;profile=mcp-app` resource at **`ui://widget/llm-app-mcp-app.html`**, **`@modelcontextprotocol/ext-apps`** in the shell (jsdelivr); tool results **omit** **`openai/*`** keys; **`structuredContent`** still carries **`experienceUrl`**, **`ui`**, etc.
+3. **`markdown`** — Text-only / widget-less clients: **no** `ui://` resources, **no** OpenAI **`_meta`** on tools; tool **`content`** markdown must still describe **how to continue in chat** (exact tool names and JSON fields, e.g. **`spotlight`** with **`topic`** from **`structuredContent.next_actions`**) with optional deep links as a supplement, not the only path.
+
+Profile resolution (see **`actions/mcp/mcp-ui-profile.js`**): top-level **`params.MCP_UI_PROFILE`**, then **`__ow_query`** (e.g. `…/mcp?MCP_UI_PROFILE=markdown`), then headers **`x-mcp-ui-profile`** / **`mcp-ui-profile`**, then **`process.env`** / **`app.config.yaml`** `inputs`. Legacy: **`DISABLE_OPENAI_WIDGET`** (and **`x-disable-openai-widget`**) maps to **`markdown`** only — use **`MCP_UI_PROFILE=mcp_apps`** explicitly for the MCP Apps iframe.
+
 ## MCP server, deep links, and ChatGPT Apps
 
 - **`actions/mcp/llm-boilerplate-tools.js`** registers MCP tools **`recommend`** (`location`) and **`spotlight`** (`topic`) that mirror the REST handlers. Resolution of public bases and safe client-facing URLs lives in **`resolve-web-base.js`**; **`experience-routes.json`** maps each tool name to the SPA segment (must stay aligned with **`brand.toolRoutes[*].path`**).
 - **`buildExperienceViewUrl`** (same module family) builds deep links into the SPA. **Default:** path URLs (`https://host/recommendation?location=…`) for **`BrowserRouter`**. If the static host cannot serve `index.html` for arbitrary paths (typical **Adobe App Builder** static delivery), set **`LLM_EXPERIENCE_USE_HASH_ROUTES=1`** on the MCP action (OpenWhisk **`params` / env**, often via **`app.config.yaml`** `inputs`) so links are `https://host/#/recommendation?…`. **Keep the SPA in sync:** set **`useHashRouter`: true** in **`web-src/src/brand.json`** so **`app.jsx`** wraps the tree in **`HashRouter`**. When the SPA is also namespaced under **`/<package>/`** (synced **`LLM_SPA_BASENAME`**), hash deep links use **`https://host/<package>/index.html#/…`** so **`*.adobeio-static.net`** serves a real document instead of 404 on **`/<package>#/`** (the fragment is not sent to the server). If MCP emits path URLs while the SPA uses `HashRouter`, bookmark and widget links will not match the router.
-- **`app.config.yaml`** passes through optional **`LLM_APP_BASE_URL`**, **`LLM_EXPERIENCE_ORIGIN`**, **`LLM_APP_OW_PACKAGE`**, **`LLM_CHATGPT_FRAME_DOMAINS`**, and (when used) **`LLM_EXPERIENCE_USE_HASH_ROUTES`** for the MCP action — see the env table below.
+- **`app.config.yaml`** passes through optional **`LLM_APP_BASE_URL`**, **`LLM_EXPERIENCE_ORIGIN`**, **`LLM_APP_OW_PACKAGE`**, **`LLM_CHATGPT_FRAME_DOMAINS`**, **`MCP_UI_PROFILE`**, **`DISABLE_OPENAI_WIDGET`**, and (when used) **`LLM_EXPERIENCE_USE_HASH_ROUTES`** for the MCP action — see the env table below.
 - **`web-src/src/components/DeepLinkSessionSync.jsx`** opens sessions from the query string: **`location`** (recommend) and **`topic`** (spotlight). Legacy aliases **`productType`** / **`product`** still work for older bookmarks.
 - **`mcpAppsBridge.js`** + **`RecommendSpotlightCta`**: in an embedded ChatGPT-style iframe, the CTA tries **`window.openai.callTool('spotlight', { topic })`** (or MCP **`tools/call`**) and always **`navigate`**s to the in-app spotlight route so **`POST /spotlight`** runs via **`ToolParallelStack`** even if the host bridge is a no-op.
+- **MCP UI profile** (`actions/mcp/mcp-ui-profile.js`, **`registerExperienceWidgetsForProfile`** / **`patchToolsListForLlmAppWebapp`** in **`chatgpt-webapp-support.js`**): see **Multi-host interaction requirement** above.
 
 ## SPA routing and experience layout
 
@@ -170,10 +182,10 @@ differently still work.
 
 ### Adobe App Builder: static SPA host vs Runtime API host
 
-- **Serve and bookmark the UI from the static workspace host**, typically **`https://<workspace>-<app>.adobeio-static.net/`** (exact hostname is shown in your App Builder / deploy output). That is where **`index.html`** and the Parcel bundle live. With **namespaced** builds (default when the Runtime package key is present and **`LLM_STATIC_WEB_AT_ROOT`** is unset), hash routes look like **`https://…adobeio-static.net/<package>/index.html#/coffee-quiz?…`** so each app under the same origin keeps its own shell and hashed assets. With **`LLM_STATIC_WEB_AT_ROOT=1`** (single SPA per host), links use **`…/index.html#/…`** at the origin root instead — do not use that mode when multiple apps require **`/<package>/`** isolation.
-- **`https://<workspace>-<app>.adobeioruntime.net/`** is the **Adobe I/O Runtime web-actions API** surface (`/api/v1/web/<ns>/<pkg>/…`). It is **not** a general-purpose static file host for `/` + client-side routes. Opening **`…adobeioruntime.net/#/…`** (origin + hash only) usually does **not** return your SPA; the gateway often **redirects** to Adobe’s generic Runtime documentation ([`developer.adobe.com/runtime`](https://developer.adobe.com/runtime/)), which breaks quiz and experience deep links.
-- **Set `LLM_EXPERIENCE_ORIGIN`** (MCP action `inputs` / secrets) to the **same static origin** you use in the browser so **`buildExperienceViewUrl`** in **`resolve-web-base.js`** never emits quiz or experience links on **`adobeioruntime.net`** unless that host truly serves your built `index.html` at `/` (unusual for App Builder).
-- **Automatic fallback (no env required):** **`resolveLlmExperienceOrigin`** maps any workspace **`*.adobeioruntime.net`** origin it would otherwise return to the matching **`*.adobeio-static.net`** origin via **`mapWorkspaceAdobeRuntimeToStaticSpaOrigin`** (same subdomain prefix). **`resolveLlmPublicWebActionOrigin`** / **`resolveLlmClientWebBase`** are unchanged — Runtime remains the target for **`/api/v1/web/…`** POSTs. The SPA entry **`web-src/src/index.jsx`** calls **`redirectAdobeRuntimeSpaToStaticHost()`** from **`lib/adobeSpaHost.js`** so opening a quiz URL on **`adobeioruntime.net`** immediately **`location.replace`**s to the static host (skips paths that already include **`/api/v1/web/`**).
+- **Serve and bookmark the UI from the static workspace host**, typically **`https://<workspace>-<app>.adobeio-static.net/`** (exact hostname is shown in your App Builder / deploy output). That is where **`index.html`** and the Parcel bundle live. With **namespaced** builds (default when the Runtime package key is present and **`LLM_STATIC_WEB_AT_ROOT`** is unset), hash routes look like **`https://…adobeio-static.net/<package>/index.html#/recommendation?…`** so each app under the same origin keeps its own shell and hashed assets. With **`LLM_STATIC_WEB_AT_ROOT=1`** (single SPA per host), links use **`…/index.html#/…`** at the origin root instead — do not use that mode when multiple apps require **`/<package>/`** isolation.
+- **`https://<workspace>-<app>.adobeioruntime.net/`** is the **Adobe I/O Runtime web-actions API** surface (`/api/v1/web/<ns>/<pkg>/…`). It is **not** a general-purpose static file host for `/` + client-side routes. Opening **`…adobeioruntime.net/#/…`** (origin + hash only) usually does **not** return your SPA; the gateway often **redirects** to Adobe’s generic Runtime documentation ([`developer.adobe.com/runtime`](https://developer.adobe.com/runtime/)), which breaks experience deep links.
+- **Set `LLM_EXPERIENCE_ORIGIN`** (MCP action `inputs` / secrets) to the **same static origin** you use in the browser so **`buildExperienceViewUrl`** in **`resolve-web-base.js`** never emits experience links on **`adobeioruntime.net`** unless that host truly serves your built `index.html` at `/` (unusual for App Builder).
+- **Automatic fallback (no env required):** **`resolveLlmExperienceOrigin`** maps any workspace **`*.adobeioruntime.net`** origin it would otherwise return to the matching **`*.adobeio-static.net`** origin via **`mapWorkspaceAdobeRuntimeToStaticSpaOrigin`** (same subdomain prefix). **`resolveLlmPublicWebActionOrigin`** / **`resolveLlmClientWebBase`** are unchanged — Runtime remains the target for **`/api/v1/web/…`** POSTs. The SPA entry **`web-src/src/index.jsx`** calls **`redirectAdobeRuntimeSpaToStaticHost()`** from **`lib/adobeSpaHost.js`** so opening an experience URL on **`adobeioruntime.net`** immediately **`location.replace`**s to the static host (skips paths that already include **`/api/v1/web/`**).
 
 ### Tool-route embed (experience-only chrome)
 
@@ -318,7 +330,7 @@ agent must touch **all** of these and nothing else:
 8. **(optional)** `test/chat-recommend.test.ts` style coverage for
    the new action.
 
-9. **(optional, MCP)** Extend **`actions/mcp/llm-boilerplate-tools.js`** with a `compare` MCP tool (same JSON contract as the REST handler) if ChatGPT/MCP consumers need it.
+9. **(optional, MCP)** Extend **`actions/mcp/llm-boilerplate-tools.js`** with a `compare` MCP tool (same JSON contract as the REST handler) if ChatGPT/MCP consumers need it. If the tool is MCP-visible, ship **all three UI profiles** (**`openai`**, **`mcp_apps`**, **`markdown`**) per **Multi-host interaction requirement** — widget registration, **`tools/list`** patches, chat-complete markdown, and **`test/mcp-ui-profile.test.cjs`** coverage.
 
 If any of steps 1–7 is missed, the SPA either fails to open a
 session (step 6 mismatched), opens a session that never resolves
@@ -422,6 +434,8 @@ deployed envs):
 | `LLM_EXPERIENCE_DEV_PORT` | no | `9090` | On the **MCP** action: Parcel / bundler port under **`aio app dev`** when aio moved off **9090**; used so Model B **hash** `experienceUrl` targets **`https://localhost:<port>/<package>/index.html`** instead of **9080** (Express static 404). |
 | `LLM_SPA_BASENAME` | no | — | Optional SPA path prefix for MCP deep links (e.g. `/my-pkg`) when **`LLM_APP_BASE_URL`** cannot be inferred; must match **`LLM_SPA_BASENAME`** from **`sync:web-actions-base`** / `web-src` generated basename. |
 | `LLM_STATIC_WEB_AT_ROOT` | no | — | Set to **`1`** / **`true`** only when **one** SPA owns the whole static origin and MCP must omit the **`/<package>/`** prefix. **Leave unset** when several apps share **`*.adobeio-static.net`** and rely on **`/<package>/`** so bundles and **`index.html`** do not overwrite each other. Run **`npm run sync:web-actions-base`** after changing it. |
+| `MCP_UI_PROFILE` | no | `openai` | MCP embedded UI mode: **`openai`** (OpenAI Apps SDK widget + `openai/toolInvocation`), **`mcp_apps`** (MCP Apps `text/html;profile=mcp-app` + ext-apps shell), **`markdown`** (no `ui://` widget; chat-first markdown). |
+| `DISABLE_OPENAI_WIDGET` | no | — | Legacy; when `true` / `1` / `yes`, same as **`MCP_UI_PROFILE=markdown`** (does **not** enable `mcp_apps`). |
 
 ### Deployed App Builder vs `aio app dev` (production safety)
 
@@ -455,6 +469,7 @@ These deltas are **scoped to localhost** or to **MCP params that only match loca
 - **Don't add a hand-written route for a tool.** Add it to
   `brand.toolRoutes` and `lib/toolRouting.js` does the rest.
 - **Don't enable `HashRouter` without aligning MCP.** If `brand.useHashRouter` is true, the MCP action must receive **`LLM_EXPERIENCE_USE_HASH_ROUTES=1`** (or equivalent); otherwise experience URLs from the server will not match the client router.
+- **Don't add MCP-visible tools that only target one host.** Keep OpenAI **`_meta`**, MCP Apps resources, and **`markdown-ui.js`** chat-complete copy aligned (see **Multi-host interaction requirement**).
 
 ## When this guide gets out of date
 

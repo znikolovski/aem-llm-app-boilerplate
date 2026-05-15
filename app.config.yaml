@@ -58,6 +58,8 @@ application:
               LLM_EXPERIENCE_USE_HASH_ROUTES: $LLM_EXPERIENCE_USE_HASH_ROUTES
               LLM_SPA_BASENAME: $LLM_SPA_BASENAME
               LLM_EXPERIENCE_DEV_PORT: $LLM_EXPERIENCE_DEV_PORT
+              MCP_UI_PROFILE: $MCP_UI_PROFILE
+              DISABLE_OPENAI_WIDGET: $DISABLE_OPENAI_WIDGET
             annotations:
               require-adobe-auth: false
               final: true

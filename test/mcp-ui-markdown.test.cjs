@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
-const { formatLlmUiAsMarkdown } = require('../actions/mcp/llm-boilerplate-tools.js')
+const { formatLlmUiAsMarkdown, recommendNextActionsFromUi } = require('../actions/mcp/llm-boilerplate-tools.js')
 
 test('formatLlmUiAsMarkdown renders text, cards, and table', () => {
   const md = formatLlmUiAsMarkdown(
@@ -86,4 +86,22 @@ test('buildExperienceViewUrl uses same origin as LLM_APP_BASE_URL when experienc
   assert.equal(resolveLlmExperienceOrigin(params), 'https://deploy.example.com')
   const url = buildExperienceViewUrl('recommend', { location: 'x' }, params)
   assert.ok(url.startsWith('https://deploy.example.com/pkg1/recommendation?'), url)
+})
+
+test('formatLlmUiAsMarkdown markdown profile emphasizes chat-first follow-up', () => {
+  const md = formatLlmUiAsMarkdown(
+    [{ type: 'card', title: 'A', body: 'B', spotlightTopic: 'Topic One' }],
+    {
+      brand: 'Demo',
+      experienceUrl: 'https://app.example/r',
+      mcpUiProfile: 'markdown',
+      recommendNextActions: recommendNextActionsFromUi([
+        { type: 'card', title: 'A', body: 'B', variant: 'recommendHero', spotlightTopic: 'Topic One' }
+      ])
+    }
+  )
+  assert.ok(md.includes('Continue in chat'))
+  assert.ok(md.includes('Optional: full browser layout'))
+  assert.ok(md.includes('spotlight'))
+  assert.ok(!md.includes('Branded streaming UI'))
 })
